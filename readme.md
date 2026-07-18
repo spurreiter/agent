@@ -182,12 +182,10 @@ The agent container mounts:
 | Host Path | Container Path | Purpose |
 |-----------|-----------------|---------|
 | `./home` | `/home/node` | Persistent home directory |
-| `~/.npm` (host cache) | `/home/node/.npm` | npm cache |
 | Current/specified directory | `/home/node/ws` | Working directory |
 
 This ensures:
 - Persistent configuration and installed packages across runs
-- Shared npm cache for faster package downloads
 - Access to local files from the container
 
 
