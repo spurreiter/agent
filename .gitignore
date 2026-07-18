@@ -1,0 +1,3 @@
+/home*
+/files/*
+!/files/.gitkeep
