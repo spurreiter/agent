@@ -71,7 +71,6 @@ ensure_image() {
 run_image() {
 	ensure_image
 	prepare_home
-	local npm_config_cache=$(npm config get cache)
     local ws="/home/node/ws"
 
 	docker run --rm -it \
@@ -81,12 +80,12 @@ run_image() {
 	-e "PI_WORKSPACE=$ws" \
 	-w "$ws" \
 	-v "$CWD/home:/home/node" \
-	-v "$npm_config_cache:/home/node/.npm" \
 	-v "$WORK_DIR:$ws" \
 	"$IMAGE_NAME" "$@"
 }
 
-#    -v "$CWD/build/setup.sh:/usr/local/bin/setup.sh" \
+## for dev of the setup script, you can mount the local setup.sh into the container to test changes without rebuilding the image:
+#	-v "$CWD/build/setup.sh:/usr/local/bin/setup.sh" \
 
 if [[ $# -eq 0 ]]; then
 	run_image bash
