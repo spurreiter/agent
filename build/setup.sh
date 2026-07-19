@@ -14,6 +14,20 @@ install_oh_my_bash() {
   	fi
 }
 
+install_go() {
+	local go_version="1.26.5"
+	if [ ! -f "$HOME/.local/bin/go" ]; then
+		echo "Installing Go..."
+		if [ $(uname -m) = "aarch64" ]; then
+			curl -fsSL https://go.dev/dl/go${go_version}.linux-arm64.tar.gz | tar -C "$HOME/.local/share" -xz
+		else
+			curl -fsSL https://go.dev/dl/go${go_version}.linux-amd64.tar.gz | tar -C "$HOME/.local/share" -xz
+		fi
+	else
+		echo "Go is already installed."
+	fi
+}
+
 install_rust() {
 	if [ ! -f "$HOME/.cargo/bin/rustc" ]; then
 		echo "Installing Rust..."
@@ -95,14 +109,6 @@ install_claude_agent() {
 	fi
 }
 
-install_opendev_agent() {
-	if [ -f "$HOME/.local/share/npm/bin/opendev" ]; then
-		echo "opendev-agent is already installed."
-	else
-		curl --proto '=https' --tlsv1.2 -LsSf https://github.com/opendev-to/opendev/releases/latest/download/opendev-cli-installer.sh | sh
-	fi
-}
-
 ask_install_choice() {
 	echo "Select which components you want to install. Answer y or n."
 	read -r -p "Install Oh My Bash? (Y/n) " INSTALL_OH_MY_BASH || true
@@ -111,6 +117,7 @@ ask_install_choice() {
 	read -r -p "Install claude-agent? (y/N) " INSTALL_CLAUDE || true
 	read -r -p "Install common npm packages? (Y/n) " INSTALL_NPM || true
 	read -r -p "Install rust? (y/N) " INSTALL_RUST || true
+	read -r -p "Install go? (y/N) " INSTALL_GO || true
 
 	# Normalize answers to lowercase
 	INSTALL_OH_MY_BASH=$(echo "${INSTALL_OH_MY_BASH:-y}" | tr '[:upper:]' '[:lower:]')
@@ -119,6 +126,7 @@ ask_install_choice() {
 	INSTALL_CLAUDE=$(echo "${INSTALL_CLAUDE:-n}" | tr '[:upper:]' '[:lower:]')
 	INSTALL_NPM=$(echo "${INSTALL_NPM:-y}" | tr '[:upper:]' '[:lower:]')
 	INSTALL_RUST=$(echo "${INSTALL_RUST:-n}" | tr '[:upper:]' '[:lower:]')
+	INSTALL_GO=$(echo "${INSTALL_GO:-n}" | tr '[:upper:]' '[:lower:]')
 
 	if [ "$INSTALL_OH_MY_BASH" = "y" ]; then
 		install_oh_my_bash
@@ -154,6 +162,12 @@ ask_install_choice() {
 		install_rust
 	else
 		echo "Skipping Rust installation."
+	fi
+
+	if [ "$INSTALL_GO" = "y" ]; then
+		install_go
+	else
+		echo "Skipping Go installation."
 	fi
 
 	install_rtk

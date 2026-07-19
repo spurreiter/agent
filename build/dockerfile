@@ -4,7 +4,7 @@ FROM node:lts-krypton
 ENV LANG="en_US.UTF-8"
 ENV LC_CTYPE="en_US.UTF-8"
 ENV HOME="/home/node"
-ENV PATH="$HOME/.local/share/npm/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+ENV PATH="$HOME/.local/share/npm/bin:$HOME/.local/share/go/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 RUN apt-get update \
  && apt-get upgrade -y \
@@ -18,7 +18,6 @@ RUN apt-get update \
     tmux \
     vim \
     neovim \
-	golang \
 	build-essential \
 	libssl-dev \
 	libffi-dev \

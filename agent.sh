@@ -33,6 +33,7 @@ prepare_home() {
 		# PATH must be set in the Dockerfile to include these directories for global installations
 		mkdir -p "$CWD/home/.cargo/bin"
 		mkdir -p "$CWD/home/.local/bin"
+		mkdir -p "$CWD/home/.local/share/go/bin"
 		mkdir -p "$CWD/home/.local/share/npm/bin"
 
 		# prepare .npmrc for global installations
@@ -81,6 +82,7 @@ run_image() {
 	-w "$ws" \
 	-v "$CWD/home:/home/node" \
 	-v "$WORK_DIR:$ws" \
+	-v "$CWD/build/setup.sh:/usr/local/bin/setup.sh" \
 	"$IMAGE_NAME" "$@"
 }
 
