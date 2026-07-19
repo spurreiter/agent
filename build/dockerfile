@@ -28,7 +28,5 @@ RUN apt-get update \
  && ln -sf "$(which fdfind)" /usr/local/bin/fd \
  && mkdir -p /usr/local/bin
 
-COPY ./setup.sh /usr/local/bin/setup.sh
-
 USER node
 WORKDIR /home/node/ws

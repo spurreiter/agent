@@ -109,6 +109,10 @@ install_claude_agent() {
 	fi
 }
 
+to_lowercase() {
+	echo "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 ask_install_choice() {
 	echo "Select which components you want to install. Answer y or n."
 	read -r -p "Install Oh My Bash? (Y/n) " INSTALL_OH_MY_BASH || true
@@ -120,13 +124,13 @@ ask_install_choice() {
 	read -r -p "Install go? (y/N) " INSTALL_GO || true
 
 	# Normalize answers to lowercase
-	INSTALL_OH_MY_BASH=$(echo "${INSTALL_OH_MY_BASH:-y}" | tr '[:upper:]' '[:lower:]')
-	INSTALL_PI=$(echo "${INSTALL_PI:-y}" | tr '[:upper:]' '[:lower:]')
-	INSTALL_HERMES=$(echo "${INSTALL_HERMES:-n}" | tr '[:upper:]' '[:lower:]')
-	INSTALL_CLAUDE=$(echo "${INSTALL_CLAUDE:-n}" | tr '[:upper:]' '[:lower:]')
-	INSTALL_NPM=$(echo "${INSTALL_NPM:-y}" | tr '[:upper:]' '[:lower:]')
-	INSTALL_RUST=$(echo "${INSTALL_RUST:-n}" | tr '[:upper:]' '[:lower:]')
-	INSTALL_GO=$(echo "${INSTALL_GO:-n}" | tr '[:upper:]' '[:lower:]')
+	INSTALL_OH_MY_BASH=$(to_lowercase "${INSTALL_OH_MY_BASH:-y}")
+	INSTALL_PI=$(to_lowercase "${INSTALL_PI:-y}")
+	INSTALL_HERMES=$(to_lowercase "${INSTALL_HERMES:-n}")
+	INSTALL_CLAUDE=$(to_lowercase "${INSTALL_CLAUDE:-n}")
+	INSTALL_NPM=$(to_lowercase "${INSTALL_NPM:-y}")
+	INSTALL_RUST=$(to_lowercase "${INSTALL_RUST:-n}")
+	INSTALL_GO=$(to_lowercase "${INSTALL_GO:-n}")
 
 	if [ "$INSTALL_OH_MY_BASH" = "y" ]; then
 		install_oh_my_bash

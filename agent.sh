@@ -86,9 +86,6 @@ run_image() {
 	"$IMAGE_NAME" "$@"
 }
 
-## for dev of the setup script, you can mount the local setup.sh into the container to test changes without rebuilding the image:
-#	-v "$CWD/build/setup.sh:/usr/local/bin/setup.sh" \
-
 if [[ $# -eq 0 ]]; then
 	run_image bash
 else
