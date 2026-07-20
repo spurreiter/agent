@@ -46,6 +46,7 @@ install_rtk() {
 			echo "Installing RTK for aarch64..."
 			install_rust
 			cargo install --git https://github.com/rtk-ai/rtk
+			cp "$HOME/.cargo/bin/rtk" "$HOME/.local/bin/rtk"
 		else
 			echo "Installing RTK for x86_64..."
 			curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh

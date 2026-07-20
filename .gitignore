@@ -1,3 +1,5 @@
 /home*
 /files/*
 !/files/.gitkeep
+/tmp
+.DS_Store
