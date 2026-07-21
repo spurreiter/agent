@@ -78,6 +78,74 @@ install_npm_packages() {
 	fi
 }
 
+pi_config_permission_system() {
+	cat <<EOF | sed 's/\t/  /g' > $1
+{
+  "permission": {
+    "*": "allow",
+    "path": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env*": "deny",
+      "*.env.example": "allow",
+      "~/.ssh/*": "deny",
+      "~/.pi/agent/auth.json": "deny",
+      "~/.pi/agent/models.json": "deny"
+    },
+    "bash": {
+      "*": "ask",
+
+      "cat *": "allow",
+      "echo *": "allow",
+      "find *": "allow",
+      "git diff *": "allow",
+      "grep *": "allow",
+      "head *": "allow",
+      "ls *": "allow",
+      "read *": "allow",
+      "tail *": "allow",
+      "write *": "allow",
+      "rtk cat *": "allow",
+      "rtk echo *": "allow",
+      "rtk find *": "allow",
+      "rtk git diff *": "allow",
+      "rtk grep *": "allow",
+      "rtk head *": "allow",
+      "rtk ls *": "allow",
+      "rtk read *": "allow",
+      "rtk tail *": "allow",
+      "rtk write *": "allow",
+
+      "chmod *": "deny",
+      "chown *": "deny",
+      "eval *": "deny",
+      "exec *": "deny",
+      "git branch *": "deny",
+      "git checkout *": "deny",
+      "git push *": "deny",
+      "git rebase *": "deny",
+      "git reset *": "deny",
+      "rm -rf *": "deny",
+      "sudo *": "deny",
+      "write *": "allow",
+      "rtk chmod *": "deny",
+      "rtk chown *": "deny",
+      "rtk eval *": "deny",
+      "rtk exec *": "deny",
+      "rtk git branch *": "deny",
+      "rtk git checkout *": "deny",
+      "rtk git push *": "deny",
+      "rtk git rebase *": "deny",
+      "rtk git reset *": "deny",
+      "rtk rm -rf *": "deny",
+      "rtk sudo *": "deny"
+    },
+    "external_directory": "ask"
+  }
+}
+EOF
+}
+
 install_pi_agent() {
 	if [ -f "$HOME/.local/share/npm/bin/pi" ]; then
 		echo "pi-agent is already installed."
@@ -87,12 +155,19 @@ install_pi_agent() {
 		# install pi-agent packages
 		pi install npm:pi-mcp-adapter
 		pi install npm:pi-web-access
-		pi install npm:@alexanderfortin/pi-token-usage
-		pi install npm:pi-rtk-optimizer
 		pi install npm:pi-cache-optimizer
-		#pi install npm:@gotgenes/pi-permission-system
+		# rtk-optimizer needs export RTK_DB_PATH in .bashrc to work properly without exporting it every time
+		pi install npm:pi-rtk-optimizer
+		echo -e "\nexport RTK_DB_PATH=\$HOME/.pi/agent/extensions/pi-rtk-optimizer/history.db" >> "$HOME/.bashrc"
+		pi install npm:@alexanderfortin/pi-token-usage
+		pi install npm:@benvargas/pi-claude-code-use
+		# install permission system and configure it
+		pi install npm:@gotgenes/pi-permission-system
+		pi_config_permission_system ~/.pi/agent/extensions/pi-permission-system/config.json
 	fi
 }
+
+
 
 install_hermes_agent() {
 	if [ -f "$HOME/.local/bin/hermes" ]; then

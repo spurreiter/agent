@@ -153,6 +153,8 @@ The interactive setup script (`./build/setup.sh`) performs:
   - [pi-rtk-optimizer](https://www.npmjs.com/package/pi-rtk-optimizer) - RTK optimization (needs [RTK](https://www.rtk-ai.app/))
   - [pi-cache-optimizer](https://www.npmjs.com/package/pi-cache-optimizer) - Cache optimizer
   - [@alexanderfortin/pi-token-usage](https://www.npmjs.com/package/@alexanderfortin/pi-token-usage) - Token tracking
+  - [@benvargas/pi-claude-code-use](https://www.npmjs.com/package/@benvargas/pi-claude-code-use) - Claude Code integration (in case you want to use a max/pro plan)
+  - [@gotgenes/pi-permission-system](https://www.npmjs.com/package/@gotgenes/pi-permission-system) - Granular permission system with safe defaults
 
 - **hermes-agent** - Installs from Nousresearch
 - **claude-agent** - Installs Claude integration
