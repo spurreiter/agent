@@ -5,6 +5,8 @@ set -euo pipefail
 
 cd $HOME
 
+FORCE_INSTALL="n"
+
 install_oh_my_bash() {
 	local oh_my_bash_path="$HOME/.oh-my-bash"
 	if [ $FORCE_INSTALL = "y" ]; then
