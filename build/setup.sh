@@ -6,17 +6,29 @@ set -euo pipefail
 cd $HOME
 
 install_oh_my_bash() {
-	if [ ! -d "$HOME/.oh-my-bash" ]; then
+	local oh_my_bash_path="$HOME/.oh-my-bash"
+	if [ $FORCE_INSTALL = "y" ]; then
+		rm -rf "$oh_my_bash_path"
+	fi
+	if [ ! -d "$oh_my_bash_path" ]; then
 		echo "Installing Oh My Bash (non-blocking)..."
 		curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh | bash
-  	else
-    	echo "Oh My Bash is already installed."
-  	fi
+	else
+		echo "Oh My Bash is already installed."
+	fi
+	local export_path_line='export PATH="$HOME/.local/share/npm/bin:$HOME/.local/share/go/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"'
+	if ! grep -q "$export_path_line" "$HOME/.bashrc"; then
+		echo "$export_path_line" >> "$HOME/.bashrc"
+	fi
 }
 
 install_go() {
 	local go_version="1.26.5"
-	if [ ! -f "$HOME/.local/bin/go" ]; then
+	local go_bin_path="$HOME/.local/share/bin/go"
+	if [ $FORCE_INSTALL = "y" ]; then
+		test -f "$go_bin_path" && rm "$go_bin_path"
+	fi
+	if [ ! -f "$go_bin_path" ]; then
 		echo "Installing Go..."
 		if [ $(uname -m) = "aarch64" ]; then
 			curl -fsSL https://go.dev/dl/go${go_version}.linux-arm64.tar.gz | tar -C "$HOME/.local/share" -xz
@@ -29,6 +41,10 @@ install_go() {
 }
 
 install_rust() {
+	if [ $FORCE_INSTALL = "y" ]; then
+		rm -rf "$HOME/.rustup"
+		rm -rf "$HOME/.cargo"
+	fi
 	if [ ! -f "$HOME/.cargo/bin/rustc" ]; then
 		echo "Installing Rust..."
 		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -38,9 +54,10 @@ install_rust() {
 }
 
 install_rtk() {
-	if [ -f "$HOME/.local/bin/rtk" ]; then
-		echo "RTK is already installed."
-	else
+	# if [ $FORCE_INSTALL = "y" ]; then
+	# 	rm "$HOME/.local/bin/rtk"
+	# fi
+	if [ ! -f "$HOME/.local/bin/rtk" ]; then
 		if [ $(uname -m) = "aarch64" ]; then
 			# See https://github.com/rtk-ai/rtk/pull/2831
 			echo "Installing RTK for aarch64..."
@@ -51,6 +68,8 @@ install_rtk() {
 			echo "Installing RTK for x86_64..."
 			curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
 		fi
+	else
+		echo "RTK is already installed."
 	fi
 	cd "$HOME"
 	if [ "$INSTALL_PI" = "y" ]; then
@@ -65,9 +84,7 @@ install_rtk() {
 }
 
 install_npm_packages() {
-	if [ -f "$HOME/.local/share/npm/bin/prettier" ]; then
-		echo "npm packages are already installed."
-	else
+	if [ $FORCE_INSTALL = "y" ] || [ ! -f "$HOME/.local/share/npm/bin/prettier" ]; then
 		echo "Installing npm packages..."
 		npm install -g \
 			prettier \
@@ -75,49 +92,51 @@ install_npm_packages() {
 			skills \
 			sort-package-json \
 			pnpm
+	else
+		echo "npm packages are already installed."
 	fi
 }
 
 pi_config_permission_system() {
-	cat <<EOF | sed 's/\t/  /g' > $1
+	local config_path="$(dirname "$1")"
+	test ! -d "$config_path" && mkdir -p "$config_path"
+	cat <<EOF | jq '.permission.bash |= . + (to_entries | map(select(.key | startswith("rtk ") | not) | {("rtk " + .key): .value}) | add // {})' > $1
 {
   "permission": {
     "*": "allow",
     "path": {
-      "*": "allow",
+      "*.env.example": "allow",
       "*.env": "deny",
       "*.env*": "deny",
-      "*.env.example": "allow",
-      "~/.ssh/*": "deny",
-      "~/.pi/agent/auth.json": "deny",
-      "~/.pi/agent/models.json": "deny"
+      "*": "allow",
+      "~/.claude/*": "deny",
+      "~/.config/*": "deny",
+      "~/.local/*": "deny",
+      "~/.pi/*": "deny",
+      "~/.ssh/*": "deny"
     },
     "bash": {
       "*": "ask",
-
+      "awk *": "allow",
       "cat *": "allow",
       "echo *": "allow",
       "find *": "allow",
       "git diff *": "allow",
       "grep *": "allow",
       "head *": "allow",
+      "jq *": "allow",
       "ls *": "allow",
       "read *": "allow",
+      "rg *": "allow",
+      "sed *": "allow",
       "tail *": "allow",
       "write *": "allow",
-      "rtk cat *": "allow",
-      "rtk echo *": "allow",
-      "rtk find *": "allow",
-      "rtk git diff *": "allow",
-      "rtk grep *": "allow",
-      "rtk head *": "allow",
-      "rtk ls *": "allow",
-      "rtk read *": "allow",
-      "rtk tail *": "allow",
-      "rtk write *": "allow",
-
+      "apt *": "deny",
+      "brew *": "deny",
       "chmod *": "deny",
       "chown *": "deny",
+      "curl *": "deny",
+      "docker *": "deny",
       "eval *": "deny",
       "exec *": "deny",
       "git branch *": "deny",
@@ -125,20 +144,15 @@ pi_config_permission_system() {
       "git push *": "deny",
       "git rebase *": "deny",
       "git reset *": "deny",
+      "npm install *": "deny",
+      "perl -i *": "deny",
+      "pip install *": "deny",
+      "pnpm add *": "deny",
+      "pnpm install *": "deny",
       "rm -rf *": "deny",
       "sudo *": "deny",
-      "write *": "allow",
-      "rtk chmod *": "deny",
-      "rtk chown *": "deny",
-      "rtk eval *": "deny",
-      "rtk exec *": "deny",
-      "rtk git branch *": "deny",
-      "rtk git checkout *": "deny",
-      "rtk git push *": "deny",
-      "rtk git rebase *": "deny",
-      "rtk git reset *": "deny",
-      "rtk rm -rf *": "deny",
-      "rtk sudo *": "deny"
+      "wget *": "deny",
+      "yarn add *": "deny"
     },
     "external_directory": "ask"
   }
@@ -146,10 +160,14 @@ pi_config_permission_system() {
 EOF
 }
 
+pi_config_rtk_optimizer() {
+	if ! grep -q "export RTK_DB_PATH=" "$HOME/.bashrc"; then
+		echo -e "\nexport RTK_DB_PATH=\$HOME/.pi/agent/extensions/pi-rtk-optimizer/history.db" >> "$HOME/.bashrc"
+	fi
+}
+
 install_pi_agent() {
-	if [ -f "$HOME/.local/share/npm/bin/pi" ]; then
-		echo "pi-agent is already installed."
-	else		
+	if [ $FORCE_INSTALL = "y" ] || [ ! -f "$HOME/.local/share/npm/bin/pi" ]; then
 		npm install -g \
 			@earendil-works/pi-coding-agent
 		# install pi-agent packages
@@ -158,30 +176,111 @@ install_pi_agent() {
 		pi install npm:pi-cache-optimizer
 		# rtk-optimizer needs export RTK_DB_PATH in .bashrc to work properly without exporting it every time
 		pi install npm:pi-rtk-optimizer
-		echo -e "\nexport RTK_DB_PATH=\$HOME/.pi/agent/extensions/pi-rtk-optimizer/history.db" >> "$HOME/.bashrc"
+		pi_config_rtk_optimizer
 		pi install npm:@alexanderfortin/pi-token-usage
 		pi install npm:@benvargas/pi-claude-code-use
 		# install permission system and configure it
 		pi install npm:@gotgenes/pi-permission-system
 		pi_config_permission_system ~/.pi/agent/extensions/pi-permission-system/config.json
+	else
+		echo "pi-agent is already installed."
 	fi
 }
-
-
 
 install_hermes_agent() {
-	if [ -f "$HOME/.local/bin/hermes" ]; then
-		echo "hermes-agent is already installed."
-	else		
+	if [ $FORCE_INSTALL = "y" ] || [ ! -f "$HOME/.local/bin/hermes" ]; then
+		echo "Installing hermes-agent..."
 		curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+	else
+		echo "hermes-agent is already installed."
 	fi
 }
 
+claude_config_permissions() {
+	if [ ! -d "$HOME/.claude" ]; then
+		mkdir -p "$HOME/.claude"
+	fi
+	if [ ! -f "$HOME/.claude/settings.json" ]; then
+		# See https://code.claude.com/docs/en/settings#permission-rule-syntax
+		cat <<EOF | sed 's/\t/  /g' > $HOME/.claude/settings.json
+{
+  "\$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "sandbox": {
+    "enabled": false,
+    "failIfUnavailable": false
+  },
+  "permissions": {
+    "allow": [
+      "Bash(awk *)",
+      "Bash(cat *)",
+      "Bash(echo *)",
+      "Bash(find *)",
+      "Bash(git diff *)",
+      "Bash(grep *)",
+      "Bash(head *)",
+      "Bash(jq *)",
+      "Bash(ls *)",
+      "Bash(read *)",
+      "Bash(rg *)",
+      "Bash(sed *)",
+      "Bash(tail *)",
+      "Bash(write *)",
+      "Read(./.env.example)",
+      "Write(./logs/*)",
+      "Write(./.output*)"
+    ],
+    "deny": [
+      "Bash(apt *)",
+      "Bash(brew *)",
+      "Bash(chmod *)",
+      "Bash(chown *)",
+      "Bash(curl *)",
+      "Bash(docker *)",
+      "Bash(eval *)",
+      "Bash(exec *)",
+      "Bash(git branch *)",
+      "Bash(git checkout *)",
+      "Bash(git push *)",
+      "Bash(git rebase *)",
+      "Bash(git reset *)",
+      "Bash(npm install *)",
+      "Bash(perl -i *)",
+      "Bash(pip install *)",
+      "Bash(pnpm add *)",
+      "Bash(pnpm install *)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Bash(wget *)",
+      "Bash(yarn add *)",
+      "Read(.env)",
+      "Read(.env*)",
+      "Read(~/.aws)",
+      "Read(~/.claude)",
+      "Read(~/.config)",
+      "Read(~/.local)",
+      "Read(~/.pi)",
+      "Read(~/.ssh)",
+      "Write(./.env*)",
+      "Write(~/.pi)",
+      "Write(~/.ssh)",
+      "Write(~/.config)",
+      "Write(/etc/*)",
+      "Write(/usr/*)"
+    ]
+  }
+}
+EOF
+	fi
+}
+
+claude_config_permissions
+
 install_claude_agent() {
-	if [ -f "$HOME/.local/share/npm/bin/claude" ]; then
-		echo "claude-agent is already installed."
-	else
+	if [ $FORCE_INSTALL = "y" ] || [ ! -f "$HOME/.local/share/npm/bin/claude" ]; then
+		echo "Installing claude-agent..."
 		curl -fsSL https://claude.ai/install.sh | bash
+	else
+		echo "claude-agent is already installed."
 	fi
 }
 
@@ -198,6 +297,7 @@ ask_install_choice() {
 	read -r -p "Install common npm packages? (Y/n) " INSTALL_NPM || true
 	read -r -p "Install rust? (y/N) " INSTALL_RUST || true
 	read -r -p "Install go? (y/N) " INSTALL_GO || true
+	read -r -p "Force installation (overwrite existing)? (y/N) " FORCE_INSTALL || true
 
 	# Normalize answers to lowercase
 	INSTALL_OH_MY_BASH=$(to_lowercase "${INSTALL_OH_MY_BASH:-y}")
@@ -207,6 +307,7 @@ ask_install_choice() {
 	INSTALL_NPM=$(to_lowercase "${INSTALL_NPM:-y}")
 	INSTALL_RUST=$(to_lowercase "${INSTALL_RUST:-n}")
 	INSTALL_GO=$(to_lowercase "${INSTALL_GO:-n}")
+	FORCE_INSTALL=$(to_lowercase "${FORCE_INSTALL:-n}")
 
 	if [ "$INSTALL_OH_MY_BASH" = "y" ]; then
 		install_oh_my_bash

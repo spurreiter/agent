@@ -7,26 +7,27 @@ ENV HOME="/home/node"
 ENV PATH="$HOME/.local/share/npm/bin:$HOME/.local/share/go/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 RUN apt-get update \
- && apt-get upgrade -y \
- && apt-get install -y --no-install-recommends \
-    ripgrep \
-    fd-find \
-    git \
-    curl \
-    socat \
-    ca-certificates \
-    tmux \
-    vim \
-    neovim \
+&& apt-get upgrade -y \
+&& apt-get install -y --no-install-recommends \
+	ripgrep \
+	fd-find \
+	git \
+	curl \
+	socat \
+	ca-certificates \
+	tmux \
+	vim \
+	neovim \
+	jq \
 	build-essential \
 	libssl-dev \
 	libffi-dev \
 	python3-dev \
 	python3-pip \
 	python3-venv \
- && rm -rf /var/lib/apt/lists/* \
- && ln -sf "$(which fdfind)" /usr/local/bin/fd \
- && mkdir -p /usr/local/bin
+&& rm -rf /var/lib/apt/lists/* \
+&& ln -sf "$(which fdfind)" /usr/local/bin/fd \
+&& mkdir -p /usr/local/bin
 
 USER node
 WORKDIR /home/node/ws
