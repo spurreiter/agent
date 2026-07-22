@@ -94,6 +94,9 @@ install_npm_packages() {
 			skills \
 			sort-package-json \
 			pnpm
+		# echo "npx skills add -g https://github.com/obra/superpowers"
+		echo "npx skills add -g https://github.com/mattpocock/skills"
+		echo "npx skills add -g https://github.com/fission-ai/openspec"
 	else
 		echo "npm packages are already installed."
 	fi
@@ -107,20 +110,21 @@ pi_config_permission_system() {
   "permission": {
     "*": "allow",
     "path": {
+      "*": "allow",
       "*.env.example": "allow",
       "*.env": "deny",
       "*.env*": "deny",
-      "*": "allow",
       "~/.claude/*": "deny",
       "~/.config/*": "deny",
       "~/.local/*": "deny",
-      "~/.pi/*": "deny",
+      "~/.pi/agent/*.json": "deny",
       "~/.ssh/*": "deny"
     },
     "bash": {
       "*": "ask",
       "awk *": "allow",
       "cat *": "allow",
+      "cd *": "allow",
       "echo *": "allow",
       "find *": "allow",
       "git diff *": "allow",
@@ -128,10 +132,16 @@ pi_config_permission_system() {
       "head *": "allow",
       "jq *": "allow",
       "ls *": "allow",
+      "mkdir *": "allow",
+      "node *": "allow",
+      "npm *": "allow",
+      "openspec *": "allow",
       "read *": "allow",
       "rg *": "allow",
       "sed *": "allow",
+      "sort *": "allow",
       "tail *": "allow",
+      "tree *": "allow",
       "write *": "allow",
       "apt *": "deny",
       "brew *": "deny",
@@ -184,6 +194,7 @@ install_pi_agent() {
 		# install permission system and configure it
 		pi install npm:@gotgenes/pi-permission-system
 		pi_config_permission_system ~/.pi/agent/extensions/pi-permission-system/config.json
+		pi install npm:pi-subagents
 	else
 		echo "pi-agent is already installed."
 	fi

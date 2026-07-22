@@ -155,7 +155,7 @@ The interactive setup script (`./build/setup.sh`) performs:
   - [@alexanderfortin/pi-token-usage](https://www.npmjs.com/package/@alexanderfortin/pi-token-usage) - Token tracking
   - [@benvargas/pi-claude-code-use](https://www.npmjs.com/package/@benvargas/pi-claude-code-use) - Claude Code integration (in case you want to use a max/pro plan)
   - [@gotgenes/pi-permission-system](https://www.npmjs.com/package/@gotgenes/pi-permission-system) - Granular permission system with safe defaults
-
+  - [pi-subagents](https://www.npmjs.com/package/pi-subagents) - Delegate work to focused child agents
 - **hermes-agent** - Installs from Nousresearch
 - **claude-agent** - Installs Claude integration
 
