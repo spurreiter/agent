@@ -3,52 +3,172 @@
 set -euo pipefail
 # set -x
 
-cd $HOME
+cd "$HOME"
 
-FORCE_INSTALL="n"
+# Define default permission rules for Pi and Claude agents. These rules are used to configure the agents' access to files and commands.
+path_allow=(
+	'*.env.example'
+)
+path_deny=(
+	'*.env'
+	'*.env*'
+	'~/.claude/*'
+	'~/.config/*'
+	'~/.local/*'
+	'~/.pi/agent/*.json'
+	'~/.ssh/*'
+	'/etc/*'
+	'/usr/*'
+)
+bash_allow=(
+	'awk'
+	'cat'
+	'cd'
+	'echo'
+	'find'
+	'git diff'
+	'git status'
+	'go'
+	'gofmt'
+	'grep'
+	'head'
+	'jq'
+	'ls'
+	'mkdir'
+	'node'
+	'npm'
+	'openspec'
+	'read'
+	'rg'
+	'sed'
+	'sort'
+	'stat'
+	'tail'
+	'tr'
+	'tree'
+	'wc'
+	'write'
+)
+bash_deny=(
+	'apt'
+	'brew'
+	'chmod'
+	'chown'
+	'curl'
+	'docker'
+	'eval'
+	'exec'
+	'git branch'
+	'git checkout'
+	'git push'
+	'git rebase'
+	'git reset'
+	'npm install'
+	'perl -i'
+	'pip install'
+	'pnpm add'
+	'pnpm install'
+	'rm -rf'
+	'rmdir'
+	'sudo'
+	'wget'
+	'yarn add'
+)
+
+pi_bin="$HOME/.local/share/npm/bin/pi"
+claude_bin="$HOME/.local/share/npm/bin/claude"
+hermes_bin="$HOME/.local/bin/hermes"
+
+is_yes() {
+	[[ "$1" == "y" ]]
+}
+
+to_json(){
+	local array=("$@")	
+	printf '%s\n' "${array[@]}" | jq -R -s -c 'split("\n")[:-1]'
+}
+
+create_directory() {
+	local dir="$1"
+	if [[ ! -d "$dir" ]]; then
+		mkdir -p "$dir"
+	fi
+}
+
+append_to_bashrc_once() {
+	local line="$1"
+	local bashrc="$HOME/.bashrc"
+
+	touch "$bashrc"
+	grep -Fqx "$line" "$bashrc" || printf '%s\n' "$line" >> "$bashrc"
+}
+
+require_command() {
+	command -v "$1" >/dev/null 2>&1 || {
+		printf 'Required command not found: %s\n' "$1" >&2
+		return 1
+	}
+}
 
 install_oh_my_bash() {
 	local oh_my_bash_path="$HOME/.oh-my-bash"
-	if [ $FORCE_INSTALL = "y" ]; then
+	if is_yes "$FORCE_INSTALL"; then
 		rm -rf "$oh_my_bash_path"
 	fi
-	if [ ! -d "$oh_my_bash_path" ]; then
-		echo "Installing Oh My Bash (non-blocking)..."
+	if [[ ! -d "$oh_my_bash_path" ]]; then
+		echo "Installing Oh My Bash..."
+		require_command curl
 		curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh | bash
 	else
 		echo "Oh My Bash is already installed."
 	fi
-	local export_path_line='export PATH="$HOME/.local/share/npm/bin:$HOME/.local/share/go/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"'
-	if ! grep -q "$export_path_line" "$HOME/.bashrc"; then
-		echo "$export_path_line" >> "$HOME/.bashrc"
-	fi
+
+	append_to_bashrc_once 'export PATH="$HOME/.local/share/npm/bin:$HOME/.local/share/go/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"'
 }
 
 install_go() {
 	local go_version="1.26.5"
-	local go_bin_path="$HOME/.local/share/bin/go"
-	if [ $FORCE_INSTALL = "y" ]; then
-		test -f "$go_bin_path" && rm "$go_bin_path"
+	local go_root="$HOME/.local/share/go"
+	local go_bin_path="$go_root/bin/go"
+	local architecture
+
+	case "$(uname -m)" in
+		x86_64) architecture="amd64" ;;
+		aarch64|arm64) architecture="arm64" ;;
+		*)
+			printf 'Unsupported Go architecture: %s\n' "$(uname -m)" >&2
+			return 1
+			;;
+	esac
+
+	if is_yes "$FORCE_INSTALL"; then
+		rm -rf "$go_root"
 	fi
-	if [ ! -f "$go_bin_path" ]; then
-		echo "Installing Go..."
-		if [ $(uname -m) = "aarch64" ]; then
-			curl -fsSL https://go.dev/dl/go${go_version}.linux-arm64.tar.gz | tar -C "$HOME/.local/share" -xz
-		else
-			curl -fsSL https://go.dev/dl/go${go_version}.linux-amd64.tar.gz | tar -C "$HOME/.local/share" -xz
-		fi
-	else
+	if [[ -x "$go_bin_path" ]]; then
 		echo "Go is already installed."
+		return
 	fi
+
+	echo "Installing Go ${go_version}..."
+	require_command curl
+	require_command tar
+	mkdir -p "$HOME/.local/share"
+	curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+		"https://go.dev/dl/go${go_version}.linux-${architecture}.tar.gz" |
+		tar -xz -C "$HOME/.local/share"
+	[[ -x "$go_bin_path" ]] || {
+		echo "Go installation did not create $go_bin_path" >&2
+		return 1
+	}
 }
 
 install_rust() {
-	if [ $FORCE_INSTALL = "y" ]; then
-		rm -rf "$HOME/.rustup"
-		rm -rf "$HOME/.cargo"
+	if is_yes "$FORCE_INSTALL"; then
+		rm -rf "$HOME/.rustup" "$HOME/.cargo"
 	fi
-	if [ ! -f "$HOME/.cargo/bin/rustc" ]; then
+	if [[ ! -x "$HOME/.cargo/bin/rustc" ]]; then
 		echo "Installing Rust..."
+		require_command curl
 		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 	else
 		echo "Rust is already installed."
@@ -56,153 +176,150 @@ install_rust() {
 }
 
 install_rtk() {
-	# if [ $FORCE_INSTALL = "y" ]; then
-	# 	rm "$HOME/.local/bin/rtk"
-	# fi
-	if [ ! -f "$HOME/.local/bin/rtk" ]; then
-		if [ $(uname -m) = "aarch64" ]; then
-			# See https://github.com/rtk-ai/rtk/pull/2831
-			echo "Installing RTK for aarch64..."
-			install_rust
-			cargo install --git https://github.com/rtk-ai/rtk
-			cp "$HOME/.cargo/bin/rtk" "$HOME/.local/bin/rtk"
-		else
-			echo "Installing RTK for x86_64..."
-			curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
-		fi
-	else
-		echo "RTK is already installed."
+	local rtk_bin="$HOME/.local/bin/rtk"
+
+	if is_yes "$FORCE_INSTALL"; then
+		rm -f "$rtk_bin"
 	fi
-	cd "$HOME"
-	if [ "$INSTALL_PI" = "y" ]; then
-		rtk init --agent pi
+	if [[ ! -x "$rtk_bin" ]]; then
+		case "$(uname -m)" in
+			aarch64|arm64)
+				# See https://github.com/rtk-ai/rtk/pull/2831
+				echo "Installing RTK for ARM64..."
+				install_rust
+				"$HOME/.cargo/bin/cargo" install --git https://github.com/rtk-ai/rtk
+				mkdir -p "$(dirname "$rtk_bin")"
+				install -m 0755 "$HOME/.cargo/bin/rtk" "$rtk_bin"
+				;;
+			x86_64)
+				echo "Installing RTK for x86_64..."
+				require_command curl
+				curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
+				;;
+			*)
+				printf 'Unsupported RTK architecture: %s\n' "$(uname -m)" >&2
+				return 1
+				;;
+		esac
 	fi
-	if [ "$INSTALL_HERMES" = "y" ]; then
-		rtk init --agent hermes
+	[[ -x "$rtk_bin" ]] || {
+		echo "RTK installation did not create $rtk_bin" >&2
+		return 1
+	}
+
+	if [[ -x "$pi_bin" ]]; then
+		"$rtk_bin" init --agent pi
 	fi
-	if [ "$INSTALL_CLAUDE" = "y" ]; then
-		rtk init --agent claude
+	if [[ -x "$hermes_bin" ]]; then
+		"$rtk_bin" init --agent hermes
+	fi
+	if [[ -x "$claude_bin" ]]; then
+		"$rtk_bin" init --agent claude
 	fi
 }
 
 install_npm_packages() {
-	if [ $FORCE_INSTALL = "y" ] || [ ! -f "$HOME/.local/share/npm/bin/prettier" ]; then
+	if is_yes "$FORCE_INSTALL" || [[ ! -x "$HOME/.local/share/npm/bin/prettier" ]]; then
 		echo "Installing npm packages..."
+		require_command npm
 		npm install -g \
-			prettier \
 			@fission-ai/openspec \
+			pnpm \
+			prettier \
 			skills \
-			sort-package-json \
-			pnpm
-		# echo "npx skills add -g https://github.com/obra/superpowers"
-		echo "npx skills add -g https://github.com/mattpocock/skills"
-		echo "npx skills add -g https://github.com/fission-ai/openspec"
+			sort-package-json
+		echo "To add optional skills, run:"
+		echo "  npx skills add -g https://github.com/mattpocock/skills"
+		echo "  npx skills add -g https://github.com/fission-ai/openspec"
 	else
 		echo "npm packages are already installed."
 	fi
 }
 
 pi_config_permission_system() {
-	local config_path="$(dirname "$1")"
-	test ! -d "$config_path" && mkdir -p "$config_path"
-	cat <<EOF | jq '.permission.bash |= . + (to_entries | map(select(.key | startswith("rtk ") | not) | {("rtk " + .key): .value}) | add // {})' > $1
-{
-  "permission": {
-    "*": "allow",
-    "path": {
-      "*": "allow",
-      "*.env.example": "allow",
-      "*.env": "deny",
-      "*.env*": "deny",
-      "~/.claude/*": "deny",
-      "~/.config/*": "deny",
-      "~/.local/*": "deny",
-      "~/.pi/agent/*.json": "deny",
-      "~/.ssh/*": "deny"
-    },
-    "bash": {
-      "*": "ask",
-      "awk *": "allow",
-      "cat *": "allow",
-      "cd *": "allow",
-      "echo *": "allow",
-      "find *": "allow",
-      "git diff *": "allow",
-      "grep *": "allow",
-      "head *": "allow",
-      "jq *": "allow",
-      "ls *": "allow",
-      "mkdir *": "allow",
-      "node *": "allow",
-      "npm *": "allow",
-      "openspec *": "allow",
-      "read *": "allow",
-      "rg *": "allow",
-      "sed *": "allow",
-      "sort *": "allow",
-      "tail *": "allow",
-      "tree *": "allow",
-      "write *": "allow",
-      "apt *": "deny",
-      "brew *": "deny",
-      "chmod *": "deny",
-      "chown *": "deny",
-      "curl *": "deny",
-      "docker *": "deny",
-      "eval *": "deny",
-      "exec *": "deny",
-      "git branch *": "deny",
-      "git checkout *": "deny",
-      "git push *": "deny",
-      "git rebase *": "deny",
-      "git reset *": "deny",
-      "npm install *": "deny",
-      "perl -i *": "deny",
-      "pip install *": "deny",
-      "pnpm add *": "deny",
-      "pnpm install *": "deny",
-      "rm -rf *": "deny",
-      "sudo *": "deny",
-      "wget *": "deny",
-      "yarn add *": "deny"
-    },
-    "external_directory": "ask"
-  }
-}
-EOF
-}
+	if [[ ! -x "$pi_bin" ]]; then
+		echo "Skipping Pi permission configuration because Pi is not installed."
+		return
+	fi
 
-pi_config_rtk_optimizer() {
-	if ! grep -q "export RTK_DB_PATH=" "$HOME/.bashrc"; then
-		echo -e "\nexport RTK_DB_PATH=\$HOME/.pi/agent/extensions/pi-rtk-optimizer/history.db" >> "$HOME/.bashrc"
+	local config_json_path="$HOME/.pi/agent/extensions/pi-permission-system/config.json"
+
+	if [[ -f "$config_json_path" ]] && ! is_yes "$FORCE_INSTALL"; then
+		echo "Pi permission configuration already exists; preserving it (use --force to replace it)."
+		return
+	fi
+	create_directory "$(dirname "$config_json_path")"
+	require_command jq
+
+	local path_allow_json=$(to_json "${path_allow[@]}")
+	local path_deny_json=$(to_json "${path_deny[@]}")
+	local bash_allow_json=$(to_json "${bash_allow[@]}")
+	local bash_deny_json=$(to_json "${bash_deny[@]}")
+
+	# Merge permission entries: keep existing, set default ask, and add allowed bash commands
+	if ! jq \
+		--argjson path_allow "$path_allow_json" \
+		--argjson path_deny "$path_deny_json" \
+		--argjson bash_allow "$bash_allow_json" \
+		--argjson bash_deny "$bash_deny_json" '
+		.permission |= (. // {})
+		| .permission.path |= . + (reduce $path_allow[] as $path ({}; . + {("\($path)"): "allow"}) )
+		| .permission.path |= . + (reduce $path_deny[] as $path ({}; . + {("\($path)"): "deny"}) )
+		| .permission.bash |= . + (reduce $bash_allow[] as $cmd ({}; . + {("\($cmd) *"): "allow"}) )
+		| .permission.bash |= . + (reduce $bash_deny[] as $cmd ({}; . + {("\($cmd) *"): "deny"}) )
+		| .permission.bash |= . + (to_entries | map(select(.key | startswith("rtk ") | not) | {("rtk " + .key): .value}) | add // {})
+		' > "$config_json_path" <<-'EOF'
+		{
+			"permission": {
+				"*": "allow",
+				"path": {},
+				"bash": {
+					"*": "ask"
+				},
+				"external_directory": "ask"
+			}
+		}
+		EOF
+	then
+		echo "Failed to write Pi permission configuration." >&2
+		return 1
 	fi
 }
 
+pi_config_rtk_optimizer() {
+	append_to_bashrc_once 'export RTK_DB_PATH="$HOME/.pi/agent/extensions/pi-rtk-optimizer/history.db"'
+}
+
 install_pi_agent() {
-	if [ $FORCE_INSTALL = "y" ] || [ ! -f "$HOME/.local/share/npm/bin/pi" ]; then
-		npm install -g \
-			@earendil-works/pi-coding-agent
-		# install pi-agent packages
-		pi install npm:pi-mcp-adapter
-		pi install npm:pi-web-access
-		pi install npm:pi-cache-optimizer
-		# rtk-optimizer needs export RTK_DB_PATH in .bashrc to work properly without exporting it every time
-		pi install npm:pi-rtk-optimizer
+	if is_yes "$FORCE_INSTALL" || [[ ! -x "$pi_bin" ]]; then
+		echo "Installing pi-agent..."
+		require_command npm
+		npm install -g @earendil-works/pi-coding-agent
+		[[ -x "$pi_bin" ]] || {
+			echo "Pi installation did not create $pi_bin" >&2
+			return 1
+		}
+		# Install Pi extensions using the binary we just installed; it may not yet be on PATH.
+		"$pi_bin" install npm:pi-mcp-adapter
+		"$pi_bin" install npm:pi-web-access
+		"$pi_bin" install npm:pi-cache-optimizer
+		# rtk-optimizer needs RTK_DB_PATH available in future shells.
+		"$pi_bin" install npm:pi-rtk-optimizer
 		pi_config_rtk_optimizer
-		pi install npm:@alexanderfortin/pi-token-usage
-		pi install npm:@benvargas/pi-claude-code-use
-		# install permission system and configure it
-		pi install npm:@gotgenes/pi-permission-system
-		pi_config_permission_system ~/.pi/agent/extensions/pi-permission-system/config.json
-		pi install npm:pi-subagents
+		"$pi_bin" install npm:@alexanderfortin/pi-token-usage
+		"$pi_bin" install npm:@benvargas/pi-claude-code-use
+		"$pi_bin" install npm:@gotgenes/pi-permission-system
+		pi_config_permission_system
+		"$pi_bin" install npm:pi-subagents
 	else
 		echo "pi-agent is already installed."
 	fi
 }
 
 install_hermes_agent() {
-	if [ $FORCE_INSTALL = "y" ] || [ ! -f "$HOME/.local/bin/hermes" ]; then
+	if is_yes "$FORCE_INSTALL" || [[ ! -x "$hermes_bin" ]]; then
 		echo "Installing hermes-agent..."
+		require_command curl
 		curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 	else
 		echo "hermes-agent is already installed."
@@ -210,87 +327,63 @@ install_hermes_agent() {
 }
 
 claude_config_permissions() {
-	if [ ! -d "$HOME/.claude" ]; then
-		mkdir -p "$HOME/.claude"
+	if [[ ! -x "$claude_bin" ]]; then
+		echo "Skipping Claude permission configuration because Claude is not installed."
+		return
 	fi
-	if [ ! -f "$HOME/.claude/settings.json" ]; then
-		# See https://code.claude.com/docs/en/settings#permission-rule-syntax
-		cat <<EOF | sed 's/\t/  /g' > $HOME/.claude/settings.json
-{
-  "\$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "sandbox": {
-    "enabled": false,
-    "failIfUnavailable": false
-  },
-  "permissions": {
-    "allow": [
-      "Bash(awk *)",
-      "Bash(cat *)",
-      "Bash(echo *)",
-      "Bash(find *)",
-      "Bash(git diff *)",
-      "Bash(grep *)",
-      "Bash(head *)",
-      "Bash(jq *)",
-      "Bash(ls *)",
-      "Bash(read *)",
-      "Bash(rg *)",
-      "Bash(sed *)",
-      "Bash(tail *)",
-      "Bash(write *)",
-      "Read(./.env.example)",
-      "Write(./logs/*)",
-      "Write(./.output*)"
-    ],
-    "deny": [
-      "Bash(apt *)",
-      "Bash(brew *)",
-      "Bash(chmod *)",
-      "Bash(chown *)",
-      "Bash(curl *)",
-      "Bash(docker *)",
-      "Bash(eval *)",
-      "Bash(exec *)",
-      "Bash(git branch *)",
-      "Bash(git checkout *)",
-      "Bash(git push *)",
-      "Bash(git rebase *)",
-      "Bash(git reset *)",
-      "Bash(npm install *)",
-      "Bash(perl -i *)",
-      "Bash(pip install *)",
-      "Bash(pnpm add *)",
-      "Bash(pnpm install *)",
-      "Bash(rm -rf *)",
-      "Bash(sudo *)",
-      "Bash(wget *)",
-      "Bash(yarn add *)",
-      "Read(.env)",
-      "Read(.env*)",
-      "Read(~/.aws)",
-      "Read(~/.claude)",
-      "Read(~/.config)",
-      "Read(~/.local)",
-      "Read(~/.pi)",
-      "Read(~/.ssh)",
-      "Write(./.env*)",
-      "Write(~/.pi)",
-      "Write(~/.ssh)",
-      "Write(~/.config)",
-      "Write(/etc/*)",
-      "Write(/usr/*)"
-    ]
-  }
-}
-EOF
-	fi
-}
 
-claude_config_permissions
+	local settings_path="$HOME/.claude/settings.json"
+	if [[ -f "$settings_path" ]] && ! is_yes "$FORCE_INSTALL"; then
+		echo "Claude settings already exist; preserving them (use --force to replace them)."
+		return
+	fi
+	create_directory "$(dirname "$settings_path")"
+	require_command jq
+
+	# See https://code.claude.com/docs/en/settings#permission-rule-syntax
+
+	# use jq to add allowed paths and bash commands to the settings.json file, preserving existing entries
+	local path_allow_json=$(to_json "${path_allow[@]}")
+	local path_deny_json=$(to_json "${path_deny[@]}")
+	local bash_allow_json=$(to_json "${bash_allow[@]}")
+	local bash_deny_json=$(to_json "${bash_deny[@]}")
+
+	if ! jq --argjson path_allow "$path_allow_json" \
+			--argjson path_deny "$path_deny_json" \
+			--argjson bash_allow "$bash_allow_json" \
+			--argjson bash_deny "$bash_deny_json" '
+			.permissions |= (. // { "allow": [], "deny": [] })
+			| .permissions.allow |= . + ($bash_allow | map("Bash(\(.) *)"))
+			| .permissions.deny |= . + ($bash_deny | map("Bash(\(.) *)"))
+			| .permissions.allow |= . + ($bash_allow | map("Bash(rtk \(.) *)"))
+			| .permissions.deny |= . + ($bash_deny | map("Bash(rtk \(.) *)"))
+			| .permissions.allow |= . + ($path_allow | map("Write(\(.))"))
+			| .permissions.deny |= . + ($path_deny | map("Read(\(.))"))
+			' > "$settings_path" <<-'EOF'
+		{
+			"$schema": "https://json.schemastore.org/claude-code-settings.json",
+			"sandbox": {
+				"enabled": false,
+				"failIfUnavailable": false
+			},
+			"permissions": {
+				"allow": [
+				],
+				"deny": [
+				]
+			}
+		}
+		EOF
+	then
+		echo "Failed to write Claude settings." >&2
+		return 1
+	fi
+}
 
 install_claude_agent() {
-	if [ $FORCE_INSTALL = "y" ] || [ ! -f "$HOME/.local/share/npm/bin/claude" ]; then
+	if is_yes "$FORCE_INSTALL" || [[ ! -x "$claude_bin" ]]; then
 		echo "Installing claude-agent..."
+		require_command curl
 		curl -fsSL https://claude.ai/install.sh | bash
 	else
 		echo "claude-agent is already installed."
@@ -298,30 +391,72 @@ install_claude_agent() {
 }
 
 to_lowercase() {
-	echo "$1" | tr '[:upper:]' '[:lower:]'
+	printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+normalize_choice() {
+	local value
+	value="$(to_lowercase "$1")"
+	case "$value" in
+		y|yes) printf 'y' ;;
+		n|no) printf 'n' ;;
+		*)
+			printf 'Expected y or n for %s; received %q\n' "$2" "$1" >&2
+			return 2
+			;;
+	esac
+}
+
+answers() {
+	INSTALL_OH_MY_BASH="$(normalize_choice "${INSTALL_OH_MY_BASH:-y}" INSTALL_OH_MY_BASH)"
+	INSTALL_PI="$(normalize_choice "${INSTALL_PI:-y}" INSTALL_PI)"
+	INSTALL_HERMES="$(normalize_choice "${INSTALL_HERMES:-n}" INSTALL_HERMES)"
+	INSTALL_CLAUDE="$(normalize_choice "${INSTALL_CLAUDE:-n}" INSTALL_CLAUDE)"
+	INSTALL_NPM="$(normalize_choice "${INSTALL_NPM:-y}" INSTALL_NPM)"
+	INSTALL_RUST="$(normalize_choice "${INSTALL_RUST:-n}" INSTALL_RUST)"
+	INSTALL_GO="$(normalize_choice "${INSTALL_GO:-n}" INSTALL_GO)"
+	FORCE_INSTALL="$(normalize_choice "${FORCE_INSTALL:-n}" FORCE_INSTALL)"
+}
+
+get_default() {
+	# return Y/n for yes, N/y for no
+	case "$1" in
+		y|Y)
+			echo "(Y/n)"
+			;;
+		*)
+			echo "(N/y)"
+			;;
+	esac
+}
+
+ask_choice() {
+	local variable="$1"
+	local prompt="$2"
+	local reply
+	local default="${!variable}"
+
+	read -r -p "$prompt $(get_default "$default") " reply || reply=""
+	if [[ -n "$reply" ]]; then
+		printf -v "$variable" '%s' "$reply"
+	fi
 }
 
 ask_install_choice() {
 	echo "Select which components you want to install. Answer y or n."
-	read -r -p "Install Oh My Bash? (Y/n) " INSTALL_OH_MY_BASH || true
-	read -r -p "Install pi-agent? (Y/n) " INSTALL_PI || true
-	read -r -p "Install hermes-agent? (y/N) " INSTALL_HERMES || true
-	read -r -p "Install claude-agent? (y/N) " INSTALL_CLAUDE || true
-	read -r -p "Install common npm packages? (Y/n) " INSTALL_NPM || true
-	read -r -p "Install rust? (y/N) " INSTALL_RUST || true
-	read -r -p "Install go? (y/N) " INSTALL_GO || true
-	read -r -p "Force installation (overwrite existing)? (y/N) " FORCE_INSTALL || true
+	ask_choice INSTALL_OH_MY_BASH "Install Oh My Bash?"
+	ask_choice INSTALL_PI "Install pi-agent?"
+	ask_choice INSTALL_HERMES "Install hermes-agent?"
+	ask_choice INSTALL_CLAUDE "Install claude-agent?"
+	ask_choice INSTALL_NPM "Install common npm packages?"
+	ask_choice INSTALL_RUST "Install Rust?"
+	ask_choice INSTALL_GO "Install Go?"
+	ask_choice FORCE_INSTALL "Force installation (overwrite existing)?"
 
-	# Normalize answers to lowercase
-	INSTALL_OH_MY_BASH=$(to_lowercase "${INSTALL_OH_MY_BASH:-y}")
-	INSTALL_PI=$(to_lowercase "${INSTALL_PI:-y}")
-	INSTALL_HERMES=$(to_lowercase "${INSTALL_HERMES:-n}")
-	INSTALL_CLAUDE=$(to_lowercase "${INSTALL_CLAUDE:-n}")
-	INSTALL_NPM=$(to_lowercase "${INSTALL_NPM:-y}")
-	INSTALL_RUST=$(to_lowercase "${INSTALL_RUST:-n}")
-	INSTALL_GO=$(to_lowercase "${INSTALL_GO:-n}")
-	FORCE_INSTALL=$(to_lowercase "${FORCE_INSTALL:-n}")
+	answers
+}
 
+run_install() {
 	if [ "$INSTALL_OH_MY_BASH" = "y" ]; then
 		install_oh_my_bash
 	else
@@ -364,12 +499,101 @@ ask_install_choice() {
 		echo "Skipping Go installation."
 	fi
 
-	install_rtk
+	if is_yes "$INSTALL_PI" || is_yes "$INSTALL_HERMES" || is_yes "$INSTALL_CLAUDE"; then
+		install_rtk
+	else
+		echo "Skipping RTK installation because no agent was selected."
+	fi
 }
 
 setup_complete() {
 	echo "Setup complete. Please restart your terminal or run 'bash' to apply changes."
 }
 
-ask_install_choice
-setup_complete
+usage() {
+	cat <<EOF
+Usage: ${0##*/} [options]
+
+Options:
+  -f, --force           Force installation (overwrite existing)
+  --agent <agent>       Enable an agent install (pi, hermes, claude)
+  --permissions         Configure permissions for installed Pi and Claude agents
+  -h, --help            Show this help message
+EOF
+}
+
+configure_permissions() {
+	pi_config_permission_system
+	pi_config_rtk_optimizer
+	claude_config_permissions
+}
+
+# Set default answers if not already set.
+answers
+
+if [[ $# -eq 0 ]]; then
+	ask_install_choice
+	run_install
+	setup_complete
+	exit 0
+fi
+
+install_requested=false
+permissions_requested=false
+force_requested=false
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		-f|--force)
+			FORCE_INSTALL="y"
+			force_requested=true
+			shift
+			;;
+		--agent)
+			if [[ $# -lt 2 || -z "$2" ]]; then
+				echo "--agent requires one of: pi, hermes, claude." >&2
+				exit 2
+			fi
+			case "$(to_lowercase "$2")" in
+				pi) INSTALL_PI="y" ;;
+				hermes) INSTALL_HERMES="y" ;;
+				claude) INSTALL_CLAUDE="y" ;;
+				*)
+					echo "Unknown agent: $2. Valid options are: pi, hermes, claude." >&2
+					exit 2
+					;;
+			esac
+			install_requested=true
+			shift 2
+			;;
+		--permissions)
+			permissions_requested=true
+			shift
+			;;
+		-h|--help)
+			usage
+			exit 0
+			;;
+		*)
+			echo "Unknown option: $1" >&2
+			usage >&2
+			exit 2
+			;;
+	esac
+done
+
+# --force alone means a forced default installation; with only --permissions it
+# instead authorizes replacing the generated permission configuration.
+if [[ "$force_requested" == true && ( "$permissions_requested" != true || "$install_requested" == true ) ]]; then
+	install_requested=true
+fi
+
+if [[ "$install_requested" == true ]]; then
+	run_install
+	setup_complete
+fi
+if [[ "$permissions_requested" == true ]]; then
+	configure_permissions
+	if [[ "$install_requested" != true ]]; then
+		echo "Permission configuration complete. Restart your terminal to apply RTK_DB_PATH."
+	fi
+fi
