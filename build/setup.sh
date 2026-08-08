@@ -76,7 +76,7 @@ bash_deny=(
 )
 
 pi_bin="$HOME/.local/share/npm/bin/pi"
-claude_bin="$HOME/.local/share/npm/bin/claude"
+claude_bin="$HOME/.local/bin/claude"
 hermes_bin="$HOME/.local/bin/hermes"
 
 is_yes() {
