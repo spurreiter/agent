@@ -311,6 +311,19 @@ install_pi_agent() {
 		"$pi_bin" install npm:@gotgenes/pi-permission-system
 		pi_config_permission_system
 		"$pi_bin" install npm:pi-subagents
+		# Install context-mode for Pi, which allows it to manage context more effectively.
+		npm install -g context-mode
+		"$pi_bin" install npm:context-mode
+		echo add to ~/.pi/agent/mcp.json
+		cat <<-EOF 
+		{
+		  "mcpServers": {
+		    "context-mode": {
+		      "command": "context-mode"
+		    }
+		  }
+		}
+		EOF
 	else
 		echo "pi-agent is already installed."
 	fi
@@ -553,6 +566,9 @@ while [[ $# -gt 0 ]]; do
 				echo "--agent requires one of: pi, hermes, claude." >&2
 				exit 2
 			fi
+			INSTALL_PI="n"
+			INSTALL_HERMES="n"
+			INSTALL_CLAUDE="n"
 			case "$(to_lowercase "$2")" in
 				pi) INSTALL_PI="y" ;;
 				hermes) INSTALL_HERMES="y" ;;
