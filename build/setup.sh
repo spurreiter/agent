@@ -188,25 +188,7 @@ install_rtk() {
 		rm -f "$rtk_bin"
 	fi
 	if [[ ! -x "$rtk_bin" ]]; then
-		case "$(uname -m)" in
-			aarch64|arm64)
-				# See https://github.com/rtk-ai/rtk/pull/2831
-				echo "Installing RTK for ARM64..."
-				install_rust
-				"$HOME/.cargo/bin/cargo" install --git https://github.com/rtk-ai/rtk
-				mkdir -p "$(dirname "$rtk_bin")"
-				install -m 0755 "$HOME/.cargo/bin/rtk" "$rtk_bin"
-				;;
-			x86_64)
-				echo "Installing RTK for x86_64..."
-				require_command curl
-				curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
-				;;
-			*)
-				printf 'Unsupported RTK architecture: %s\n' "$(uname -m)" >&2
-				return 1
-				;;
-		esac
+		curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
 	fi
 	[[ -x "$rtk_bin" ]] || {
 		echo "RTK installation did not create $rtk_bin" >&2

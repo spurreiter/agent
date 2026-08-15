@@ -5,6 +5,7 @@ set -euo pipefail
 CWD=$(cd -P -- "$(dirname -- "$0")" && pwd -P)
 WORK_DIR="$(pwd)"
 IMAGE_NAME="agent:latest"
+FROM_IMAGE=docker.io/library/ubuntu:26.10
 
 show_help() {
 	cat <<EOF
@@ -49,16 +50,17 @@ prepare_home() {
 }
 
 build_image() {
+	local docker_args="--build-arg FROM_IMAGE=$FROM_IMAGE -t $IMAGE_NAME -f ./build/dockerfile $CWD/build"
 	cd "$CWD"
-	docker pull node:lts-krypton
+	docker pull $FROM_IMAGE
 	echo "Building $IMAGE_NAME image…"
 	# Prefer BuildKit with buildx when available for verbose/plain progress
 	if command -v docker >/dev/null 2>&1 && docker buildx version >/dev/null 2>&1; then
 		echo "Buildx available — using BuildKit with plain progress"
-		DOCKER_BUILDKIT=1 docker build --progress=plain -t "$IMAGE_NAME" -f ./build/dockerfile "$CWD/build"
+		DOCKER_BUILDKIT=1 docker build --progress=plain $docker_args
 	else
 		echo "Buildx not available — falling back to standard docker build"
-		docker build -t "$IMAGE_NAME" -f ./build/dockerfile "$CWD/build"
+		docker build $docker_args
 	fi
 	prepare_home
 }

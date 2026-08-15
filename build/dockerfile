@@ -1,5 +1,5 @@
-# https://hub.docker.com/_/node/tags
-FROM node:lts-krypton
+ARG FROM_IMAGE=docker.io/library/ubuntu:26.10
+FROM $FROM_IMAGE
 
 ENV LANG="en_US.UTF-8"
 ENV LC_CTYPE="en_US.UTF-8"
@@ -9,25 +9,30 @@ ENV PATH="$HOME/.local/share/npm/bin:$HOME/.local/share/go/bin:$HOME/.local/bin:
 RUN apt-get update \
 && apt-get upgrade -y \
 && apt-get install -y --no-install-recommends \
-	ripgrep \
+	build-essential \
+	ca-certificates \
+	curl \
 	fd-find \
 	git \
-	curl \
-	socat \
-	ca-certificates \
-	tmux \
-	vim \
-	neovim \
 	jq \
-	build-essential \
-	libssl-dev \
-	libffi-dev \
+	neovim \
 	python3-dev \
 	python3-pip \
 	python3-venv \
+	ripgrep \
+	socat \
+	tmux \
+	vim \
 && rm -rf /var/lib/apt/lists/* \
 && ln -sf "$(which fdfind)" /usr/local/bin/fd \
 && mkdir -p /usr/local/bin
+
+# install node@lts - https://github.com/tj/n/tree/master/bin
+RUN curl -fsSL https://raw.githubusercontent.com/tj/n/584a616/bin/n | bash -s install lts
+
+RUN userdel -r ubuntu \
+&& groupadd --gid 1000 node \
+&& useradd --uid 1000 --gid node --shell /bin/bash --create-home node
 
 USER node
 WORKDIR /home/node/ws
