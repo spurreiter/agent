@@ -229,6 +229,7 @@ install_npm_packages() {
 		echo "Installing npm packages..."
 		require_command npm
 		npm install -g \
+			@colbymchenry/codegraph \
 			@fission-ai/openspec \
 			pnpm \
 			prettier \
@@ -330,6 +331,8 @@ install_pi_agent() {
 		  }
 		}
 		EOF
+		# install codegraph
+		"$pi_bin" install npm:@vndv/pi-codegraph
 	else
 		echo "pi-agent is already installed."
 	fi
