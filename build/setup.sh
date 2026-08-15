@@ -8,6 +8,10 @@ cd "$HOME"
 # Define default permission rules for Pi and Claude agents. These rules are used to configure the agents' access to files and commands.
 path_allow=(
 	'*.env.example'
+	'/tmp/*'
+	'/home/node/ws/*'
+	'~/.local/share/npm/lib/node_modules/@earendil-works/pi-coding-agent/README.md'
+	'~/.local/share/npm/lib/node_modules/@earendil-works/pi-coding-agent/docs/*'
 )
 path_deny=(
 	'*.env'
@@ -27,6 +31,7 @@ bash_allow=(
 	'echo'
 	'find'
 	'git diff'
+	'git log'
 	'git status'
 	'go'
 	'gofmt'
@@ -46,6 +51,7 @@ bash_allow=(
 	'tail'
 	'tr'
 	'tree'
+	'tsc'
 	'wc'
 	'write'
 )
