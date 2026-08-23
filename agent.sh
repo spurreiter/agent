@@ -50,7 +50,8 @@ prepare_home() {
 }
 
 build_image() {
-	local docker_args="--build-arg FROM_IMAGE=$FROM_IMAGE -t $IMAGE_NAME -f ./build/dockerfile $CWD/build"
+	local user_id=$(id -u)
+	local docker_args="--build-arg FROM_IMAGE=$FROM_IMAGE --build-arg USER_ID=$user_id -t $IMAGE_NAME -f ./build/dockerfile $CWD/build"
 	cd "$CWD"
 	docker pull $FROM_IMAGE
 	echo "Building $IMAGE_NAME image…"
