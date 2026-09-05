@@ -148,7 +148,7 @@ is_yes() {
 }
 
 to_json() {
-	local array=("$@")	
+	local array=("$@")
 	printf '%s\n' "${array[@]}" | jq -R -s -c 'split("\n")[:-1]'
 }
 
@@ -164,7 +164,7 @@ append_to_bashrc_once() {
 	local bashrc="$HOME/.bashrc"
 
 	touch "$bashrc"
-	grep -Fqx "$line" "$bashrc" || printf '%s\n' "$line" >> "$bashrc"
+	grep -Fqx "$line" "$bashrc" || printf '%s\n' "$line" >>"$bashrc"
 }
 
 require_command() {
@@ -191,7 +191,7 @@ install_oh_my_bash() {
 
 install_rtk() {
 	require_command rtk
-	
+
 	if [[ -x "$pi_bin" ]]; then
 		rtk init --agent pi
 	fi
@@ -261,21 +261,21 @@ pi_config_permission_system() {
 		| .permission.bash |= . + (reduce $bash_allow[] as $cmd ({}; . + {("\($cmd) *"): "allow"}) )
 		| .permission.bash |= . + (reduce $bash_deny[] as $cmd ({}; . + {("\($cmd) *"): "deny"}) )
 		| .permission.bash |= . + (to_entries | map(select(.key | startswith("rtk ") | not) | {("rtk " + .key): .value}) | add // {})
-		' > "$config_json_path" <<-'EOF'
-		{
-			"permission": {
-				"*": "allow",
-				"path": {},
-				"bash": {
-					"*": "ask"
-				},
-				"external_directory": {                                                                                                    
-					"*": "ask",                                                                                                              
-					"/tmp": "allow",                                                                                                         
-					"/tmp/*": "allow"                                                                                                        
+		' >"$config_json_path" <<-'EOF'
+			{
+				"permission": {
+					"*": "allow",
+					"path": {},
+					"bash": {
+						"*": "ask"
+					},
+					"external_directory": {                                                                                                    
+						"*": "ask",                                                                                                              
+						"/tmp": "allow",                                                                                                         
+						"/tmp/*": "allow"                                                                                                        
+					}
 				}
 			}
-		}
 		EOF
 	then
 		echo "Failed to write Pi permission configuration." >&2
@@ -362,9 +362,9 @@ claude_config_permissions() {
 	local bash_deny_json=$(to_json "${bash_deny[@]}")
 
 	if ! jq --argjson path_allow "$path_allow_json" \
-			--argjson path_deny "$path_deny_json" \
-			--argjson bash_allow "$bash_allow_json" \
-			--argjson bash_deny "$bash_deny_json" '
+		--argjson path_deny "$path_deny_json" \
+		--argjson bash_allow "$bash_allow_json" \
+		--argjson bash_deny "$bash_deny_json" '
 			.permissions |= (. // { "allow": [], "deny": [] })
 			| .permissions.allow |= . + ($bash_allow | map("Bash(\(.) *)"))
 			| .permissions.deny |= . + ($bash_deny | map("Bash(\(.) *)"))
@@ -372,25 +372,50 @@ claude_config_permissions() {
 			| .permissions.deny |= . + ($bash_deny | map("Bash(rtk \(.) *)"))
 			| .permissions.allow |= . + ($path_allow | map("Edit(\(.))"))
 			| .permissions.deny |= . + ($path_deny | map("Read(\(.))"))
-			' > "$settings_path" <<-'EOF'
-		{
-			"$schema": "https://json.schemastore.org/claude-code-settings.json",
-			"sandbox": {
-				"enabled": false,
-				"failIfUnavailable": false
-			},
-			"permissions": {
-				"allow": [
-				],
-				"deny": [
-				]
+			' >"$settings_path" <<-'EOF'
+			{
+				"$schema": "https://json.schemastore.org/claude-code-settings.json",
+				"sandbox": {
+					"enabled": false,
+					"failIfUnavailable": false
+				},
+				"permissions": {
+					"allow": [
+					],
+					"deny": [
+					]
+				}
 			}
-		}
 		EOF
 	then
 		echo "Failed to write Claude settings." >&2
 		return 1
 	fi
+}
+
+install_claude_context_mode() {
+	if [[ ! -x "$claude_bin" ]]; then
+		echo "Skipping context-mode Claude Code plugin because Claude is not installed."
+		return
+	fi
+
+	require_command jq
+	echo "Configuring context-mode Claude Code plugin..."
+
+	# The marketplace command is idempotent: adding an existing marketplace
+	# refreshes its local catalog.
+	"$claude_bin" plugin marketplace add mksglu/context-mode
+
+	local installed_plugins
+	installed_plugins="$("$claude_bin" plugin list --json 2>/dev/null || true)"
+	if jq -e --arg plugin "context-mode@context-mode" \
+		'any(.. | objects; (.id? == $plugin or .name? == "context-mode" or .plugin? == $plugin))' \
+		<<<"$installed_plugins" >/dev/null 2>&1; then
+		echo "context-mode Claude Code plugin is already installed."
+		return
+	fi
+
+	"$claude_bin" plugin install context-mode@context-mode --scope user --yes
 }
 
 install_claude_agent() {
@@ -400,6 +425,8 @@ install_claude_agent() {
 	else
 		echo "claude-agent is already installed."
 	fi
+
+	install_claude_context_mode
 }
 
 to_lowercase() {
@@ -410,12 +437,12 @@ normalize_choice() {
 	local value
 	value="$(to_lowercase "$1")"
 	case "$value" in
-		y|yes) printf 'y' ;;
-		n|no) printf 'n' ;;
-		*)
-			printf 'Expected y or n for %s; received %q\n' "$2" "$1" >&2
-			return 2
-			;;
+	y | yes) printf 'y' ;;
+	n | no) printf 'n' ;;
+	*)
+		printf 'Expected y or n for %s; received %q\n' "$2" "$1" >&2
+		return 2
+		;;
 	esac
 }
 
@@ -430,12 +457,12 @@ answers() {
 get_default() {
 	# return Y/n for yes, N/y for no
 	case "$1" in
-		y|Y)
-			echo "(Y/n)"
-			;;
-		*)
-			echo "(N/y)"
-			;;
+	y | Y)
+		echo "(Y/n)"
+		;;
+	*)
+		echo "(N/y)"
+		;;
 	esac
 }
 
@@ -533,46 +560,46 @@ force_requested=false
 update_requested=false
 while [[ $# -gt 0 ]]; do
 	case "$1" in
-		-u|--update)
-			update_requested=true
-			shift
-			;;
-		-f|--force)
-			FORCE_INSTALL="y"
-			force_requested=true
-			shift
-			;;
-		--agent)
-			if [[ $# -lt 2 || -z "$2" ]]; then
-				echo "--agent requires one of: pi, claude." >&2
-				exit 2
-			fi
-			INSTALL_PI="n"
-			INSTALL_CLAUDE="n"
-			case "$(to_lowercase "$2")" in
-				pi) INSTALL_PI="y" ;;
-				claude) INSTALL_CLAUDE="y" ;;
-				*)
-					echo "Unknown agent: $2. Valid options are: pi, claude." >&2
-					exit 2
-					;;
-			esac
-			install_requested=true
-			shift 2
-			;;
-		--permissions)
-			permissions_requested=true
-			shift
-			;;
-		-h|--help)
-			usage
-			exit 0
-			;;
+	-u | --update)
+		update_requested=true
+		shift
+		;;
+	-f | --force)
+		FORCE_INSTALL="y"
+		force_requested=true
+		shift
+		;;
+	--agent)
+		if [[ $# -lt 2 || -z "$2" ]]; then
+			echo "--agent requires one of: pi, claude." >&2
+			exit 2
+		fi
+		INSTALL_PI="n"
+		INSTALL_CLAUDE="n"
+		case "$(to_lowercase "$2")" in
+		pi) INSTALL_PI="y" ;;
+		claude) INSTALL_CLAUDE="y" ;;
 		*)
-			echo "Unknown option: $1" >&2
-			usage >&2
+			echo "Unknown agent: $2. Valid options are: pi, claude." >&2
 			exit 2
 			;;
+		esac
+		install_requested=true
+		shift 2
+		;;
+	--permissions)
+		permissions_requested=true
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		echo "Unknown option: $1" >&2
+		usage >&2
+		exit 2
+		;;
 	esac
 done
 
@@ -583,7 +610,7 @@ fi
 
 # --force alone means a forced default installation; with only --permissions it
 # instead authorizes replacing the generated permission configuration.
-if [[ "$force_requested" == true && ( "$permissions_requested" != true || "$install_requested" == true ) ]]; then
+if [[ "$force_requested" == true && ("$permissions_requested" != true || "$install_requested" == true) ]]; then
 	install_requested=true
 fi
 
