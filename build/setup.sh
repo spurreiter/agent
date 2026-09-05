@@ -310,18 +310,29 @@ install_pi_agent() {
 		# Install context-mode for Pi, which allows it to manage context more effectively.
 		npm install -g context-mode
 		"$pi_bin" install npm:context-mode
-		echo add to ~/.pi/agent/mcp.json
-		cat <<-EOF 
-		{
-		  "mcpServers": {
-		    "context-mode": {
-		      "command": "context-mode"
-		    }
-		  }
-		}
-		EOF
+		local mcp_json_path="$HOME/.pi/agent/mcp.json"
+		local mcp_json_tmp
+		create_directory "$(dirname "$mcp_json_path")"
+		require_command jq
+		mcp_json_tmp="$(mktemp "${mcp_json_path}.tmp.XXXXXX")"
+		if [[ -f "$mcp_json_path" ]]; then
+			if ! jq '.mcpServers |= (. // {}) | .mcpServers["context-mode"] = {"command": "context-mode"}' \
+				"$mcp_json_path" >"$mcp_json_tmp"; then
+				rm -f "$mcp_json_tmp"
+				echo "Failed to update Pi MCP configuration." >&2
+				return 1
+			fi
+		else
+			if ! jq -n '.mcpServers = {"context-mode": {"command": "context-mode"}}' >"$mcp_json_tmp"; then
+				rm -f "$mcp_json_tmp"
+				echo "Failed to create Pi MCP configuration." >&2
+				return 1
+			fi
+		fi
+		mv "$mcp_json_tmp" "$mcp_json_path"
 		# install codegraph
 		"$pi_bin" install npm:@vndv/pi-codegraph
+		"$pi_bin" install npm:pi-lens
 	else
 		echo "pi-agent is already installed."
 	fi
