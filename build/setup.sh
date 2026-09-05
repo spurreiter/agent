@@ -343,7 +343,7 @@ install_pi_agent() {
 		pi_config_permission_system
 		"$pi_bin" install npm:pi-subagents
 		# Install context-mode for Pi, which allows it to manage context more effectively.
-		npm install -g context-mode
+		npm install -g --allow-scripts=context-mode,better-sqlite3 context-mode
 		"$pi_bin" install npm:context-mode
 		config_mcp_json \
 			"$HOME/.pi/agent/mcp.json" \
