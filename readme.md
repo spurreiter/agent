@@ -1,23 +1,24 @@
 # Agent Sandbox
 
-A containerized sandbox for running AI agents in an isolated environment. Defaults to [pi][pi.dev] but can also set up Hermes and Claude agents.
+A containerized sandbox for running AI agents in an isolated environment. It defaults to [pi][pi.dev] and can optionally set up Claude.
 
 ## Overview
 
 This repository provides a lightweight Docker-based environment for running agents with a consistent development setup. It includes:
 
-- **Docker container** with Node.js LTS and essential development tools
-- **Multi-agent support** with options for pi, Hermes, Claude, and OpenDev agents
+- **Docker container** with Node.js 26, Go, Rust, Python, Java, PlantUML, Graphviz, and essential development tools
+- **Multi-agent support** with options for pi and Claude agents
 - **Interactive setup script** to customize your environment
-- **Volume mounts** for persistent home directory, npm cache, and workspace
+- **Volume mounts** for persistent home directory and workspace
+- **Hardened runtime** with a read-only container, dropped capabilities, resource limits, and isolated temporary filesystems
 - **Helper scripts** to simplify building, setup, and execution
 
 ### Key Features
 
 - **Isolated Environment**: Run agents safely in a containerized sandbox
-- **Development Tools**: Includes git, ripgrep, fd-find, vim, neovim, golang, Python 3, Rust support
-- **Agent Ecosystem**: Pre-configured with popular AI agent frameworks
-- **Persistent Storage**: Home directory and npm cache persist between runs
+- **Development Tools**: Includes git, ripgrep, fd-find, vim, tmux, jq, tree, Go, Rust, Python 3, Java, PlantUML, Graphviz, and RTK
+- **Agent Ecosystem**: Pre-configured with pi extensions and optional Claude integration
+- **Persistent Storage**: Home directory, npm cache, and package-manager data persist between runs
 - **Cross-Platform**: Supports both x86_64 and aarch64 architectures
 
 
@@ -37,8 +38,9 @@ cd agent
 ```
 
 This will:
-- Pull the official Node.js LTS image (krypton)
-- Build the agent image with development tools
+- Pull the configured Ubuntu base image (Ubuntu 26.10 by default)
+- Build an agent image with development tools and preinstalled runtimes
+- Create the image's non-root `agent` user using the host user's UID
 - Initialize the home directory with default configuration files
 
 ### 3. Run initial setup (interactive)
@@ -49,13 +51,12 @@ This will:
 
 You'll be prompted to install:
 - **Oh My Bash** - Enhanced shell configuration (default: yes)
-- **pi-agent** - Pi coding agent (default: yes)
-- **hermes-agent** - Hermes AI agent (default: no)
+- **pi-agent** - Pi coding agent and extensions (default: yes)
 - **claude-agent** - Claude integration (default: no)
-- **npm packages** - Utilities like prettier, pnpm, and tools (default: yes)
-- **Rust** - Rust toolchain (default: no)
+- **npm packages** - CodeGraph, OpenSpec, pnpm, Prettier, Skills, and sort-package-json (default: yes)
+- **Force installation** - Replace existing agent configuration (default: no)
 
-Additional components like RTK (agent initialization tool) are installed automatically when needed.
+The image already contains RTK, Node.js, Go, Rust, Python, Java, PlantUML, and Graphviz. RTK is initialized automatically when pi or Claude is installed.
 
 ### 4. Run the agent
 
@@ -130,24 +131,27 @@ agent pi
 
 ### Home Directory (`./home`)
 
-The `./home` directory persists between container runs and contains:
+The `./home` directory is mounted at `/home/agent` and persists between container runs. It contains:
 
 - **`.npmrc`** - npm configuration for global installations to `~/.local/share/npm`
 - **`.local/share/npm/bin/`** - Global npm binaries
 - **`.local/bin/`** - User-installed binaries
 - **`.oh-my-bash/`** - Shell configuration (if installed)
-- **Agent configs** - Pi, Hermes, Claude configuration files
+- **Agent configs** - Pi and Claude configuration files
 
-All files from `./files/` are copied to `./home/` on first initialization.
+All files from `./files/` are copied to `./home/` on first initialization. The workspace is mounted at `/home/agent/ws`.
 
 
 ## Setup Script Details
 
 The interactive setup script (`./build/setup.sh`) performs:
 
+- Configures conservative path and shell-command permissions for pi and Claude, including broad read-only and diagnostic command access while denying destructive or network-sensitive commands.
+- Preserves existing agent configuration unless force installation is selected.
+
 ### Agent Installation
 
-- **pi-agent** - Installs [@earendil-works/pi-coding-agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) globally with packages:
+- **pi-agent** - Installs [@earendil-works/pi-coding-agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) globally with extensions:
   - [pi-mcp-adapter](https://www.npmjs.com/package/pi-mcp-adapter) - MCP protocol support
   - [pi-web-access](https://www.npmjs.com/package/pi-web-access) - Web browsing capabilities
   - [pi-rtk-optimizer](https://www.npmjs.com/package/pi-rtk-optimizer) - RTK optimization (needs [RTK](https://www.rtk-ai.app/))
@@ -156,7 +160,8 @@ The interactive setup script (`./build/setup.sh`) performs:
   - [@benvargas/pi-claude-code-use](https://www.npmjs.com/package/@benvargas/pi-claude-code-use) - Claude Code integration (in case you want to use a max/pro plan)
   - [@gotgenes/pi-permission-system](https://www.npmjs.com/package/@gotgenes/pi-permission-system) - Granular permission system with safe defaults
   - [pi-subagents](https://www.npmjs.com/package/pi-subagents) - Delegate work to focused child agents
-- **hermes-agent** - Installs from Nousresearch
+  - [context-mode](https://www.npmjs.com/package/context-mode) - Manage context efficiently
+  - `@vndv/pi-codegraph` - CodeGraph project navigation
 - **claude-agent** - Installs Claude integration
 
 ### RTK Integration
@@ -183,12 +188,15 @@ The agent container mounts:
 
 | Host Path | Container Path | Purpose |
 |-----------|-----------------|---------|
-| `./home` | `/home/node` | Persistent home directory |
-| Current/specified directory | `/home/node/ws` | Working directory |
+| `./home` | `/home/agent` | Persistent home directory |
+| Current/specified directory | `/home/agent/ws` | Working directory |
+| `./build/setup.sh` | `/usr/local/bin/setup.sh` (read-only) | Setup script |
 
 This ensures:
 - Persistent configuration and installed packages across runs
 - Access to local files from the container
+- A read-only container root filesystem; writable state is kept in mounted directories and limited tmpfs mounts
+- Container limits of 4 GiB memory, 2 CPUs, and 512 processes
 
 
 ## Customization
@@ -218,7 +226,7 @@ They will persist in `./home/.local/share/npm/bin/`.
 
 ### Modify the Container
 
-Edit `./build/dockerfile` to add tools, then rebuild:
+Edit `./build/dockerfile` to add tools, then rebuild. The Dockerfile accepts `FROM_IMAGE`, `USER_ID`, `ARCH`, and `network` build arguments. Set `network=false` to omit the optional network tool (`socat`); build-time downloads still require network access:
 
 ```sh
 ./agent.sh --build

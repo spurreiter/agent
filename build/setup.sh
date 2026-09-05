@@ -10,8 +10,6 @@ path_allow=(
 	'*.env.example'
 	'/tmp/*'
 	'/home/node/ws/*'
-	'~/.local/share/npm/lib/node_modules/@earendil-works/pi-coding-agent/README.md'
-	'~/.local/share/npm/lib/node_modules/@earendil-works/pi-coding-agent/docs/*'
 )
 path_deny=(
 	'*.env'
@@ -19,56 +17,102 @@ path_deny=(
 	'~/.claude/*'
 	'~/.config/*'
 	'~/.local/*'
-	'~/.pi/agent/*.json'
+	'~/.pi/agent/*'
 	'~/.ssh/*'
 	'/etc/*'
 	'/usr/*'
 )
 # some commands require `rtk` like env, err, format, json, lint, log, summary
 bash_allow=(
+	# Read-only, text-processing, and diagnostic commands inspired by bashkit.
+	# Shell evaluators, network clients, and destructive file operations remain
+	# excluded; the latter are either denied below or should use file tools.
 	'awk'
+	'base64'
+	'basename'
 	'cat'
 	'cd'
+	'column'
+	'comm'
+	'cut'
+	'date'
 	'diff'
+	'df'
+	'dirname'
+	'du'
 	'echo'
 	'env'
 	'err'
+	'false'
+	'file'
 	'find'
+	'fold'
 	'format'
+	'free'
 	'git diff'
 	'git log'
+	'git show'
 	'git status'
+	'git ls-files'
 	'go'
 	'gofmt'
 	'grep'
 	'head'
+	'hexdump'
+	'hostname'
+	'iconv'
+	'id'
+	'join'
 	'json'
 	'jq'
 	'lint'
 	'log'
 	'ls'
+	'make'
+	'md5sum'
 	'mkdir'
+	'mktemp'
+	'nl'
 	'node'
 	'npm'
+	'numfmt'
+	'od'
 	'openspec'
+	'paste'
 	'prettier'
 	'printf'
 	'pwd'
 	'read'
+	'realpath'
+	'readlink'
+	'rev'
 	'rg'
 	'sed'
+	'sha1sum'
+	'sha256sum'
+	'shuf'
+	'sleep'
 	'sort'
 	'stat'
+	'strings'
 	'summary'
+	'tac'
 	'tail'
 	'test'
 	'timeout'
 	'tr'
 	'tree'
+	'true'
 	'tsc'
+	'unexpand'
+	'uname'
+	'uniq'
+	'uptime'
 	'wc'
-	'write'
 	'which'
+	'whoami'
+	'write'
+	'xxd'
 )
 bash_deny=(
 	'apt'
@@ -98,7 +142,6 @@ bash_deny=(
 
 pi_bin="$HOME/.local/share/npm/bin/pi"
 claude_bin="$HOME/.local/bin/claude"
-hermes_bin="$HOME/.local/bin/hermes"
 
 is_yes() {
 	[[ "$1" == "y" ]]
@@ -138,87 +181,33 @@ install_oh_my_bash() {
 	fi
 	if [[ ! -d "$oh_my_bash_path" ]]; then
 		echo "Installing Oh My Bash..."
-		require_command curl
-		curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh | bash
+		cat /usr/local/oh-my-bash.sh | bash
 	else
 		echo "Oh My Bash is already installed."
 	fi
 
-	append_to_bashrc_once 'export PATH="$HOME/.local/share/npm/bin:$HOME/.local/share/go/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"'
-}
-
-install_go() {
-	local go_version="1.26.5"
-	local go_root="$HOME/.local/share/go"
-	local go_bin_path="$go_root/bin/go"
-	local architecture
-
-	case "$(uname -m)" in
-		x86_64) architecture="amd64" ;;
-		aarch64|arm64) architecture="arm64" ;;
-		*)
-			printf 'Unsupported Go architecture: %s\n' "$(uname -m)" >&2
-			return 1
-			;;
-	esac
-
-	if is_yes "$FORCE_INSTALL"; then
-		rm -rf "$go_root"
-	fi
-	if [[ -x "$go_bin_path" ]]; then
-		echo "Go is already installed."
-		return
-	fi
-
-	echo "Installing Go ${go_version}..."
-	require_command curl
-	require_command tar
-	mkdir -p "$HOME/.local/share"
-	curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
-		"https://go.dev/dl/go${go_version}.linux-${architecture}.tar.gz" |
-		tar -xz -C "$HOME/.local/share"
-	[[ -x "$go_bin_path" ]] || {
-		echo "Go installation did not create $go_bin_path" >&2
-		return 1
-	}
-}
-
-install_rust() {
-	if is_yes "$FORCE_INSTALL"; then
-		rm -rf "$HOME/.rustup" "$HOME/.cargo"
-	fi
-	if [[ ! -x "$HOME/.cargo/bin/rustc" ]]; then
-		echo "Installing Rust..."
-		require_command curl
-		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-	else
-		echo "Rust is already installed."
-	fi
+	append_to_bashrc_once 'export PATH="$HOME/.local/share/npm/bin:$HOME/.local/bin:/usr/local/go/bin:/usr/local/cargo/bin:$PATH"'
 }
 
 install_rtk() {
-	local rtk_bin="$HOME/.local/bin/rtk"
-
-	if is_yes "$FORCE_INSTALL"; then
-		rm -f "$rtk_bin"
-	fi
-	if [[ ! -x "$rtk_bin" ]]; then
-		curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
-	fi
-	[[ -x "$rtk_bin" ]] || {
-		echo "RTK installation did not create $rtk_bin" >&2
-		return 1
-	}
-
+	require_command rtk
+	
 	if [[ -x "$pi_bin" ]]; then
-		"$rtk_bin" init --agent pi
-	fi
-	if [[ -x "$hermes_bin" ]]; then
-		"$rtk_bin" init --agent hermes
+		rtk init --agent pi
 	fi
 	if [[ -x "$claude_bin" ]]; then
-		"$rtk_bin" init --agent claude
+		rtk init --agent claude
 	fi
+}
+
+update() {
+	echo "Updating global npm packages..."
+	require_command npm
+	npm update -g
+
+	echo "Updating Pi and extensions..."
+	require_command pi
+	pi update --extensions
 }
 
 install_npm_packages() {
@@ -335,16 +324,6 @@ install_pi_agent() {
 	fi
 }
 
-install_hermes_agent() {
-	if is_yes "$FORCE_INSTALL" || [[ ! -x "$hermes_bin" ]]; then
-		echo "Installing hermes-agent..."
-		require_command curl
-		curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
-	else
-		echo "hermes-agent is already installed."
-	fi
-}
-
 claude_config_permissions() {
 	if [[ ! -x "$claude_bin" ]]; then
 		echo "Skipping Claude permission configuration because Claude is not installed."
@@ -376,7 +355,7 @@ claude_config_permissions() {
 			| .permissions.deny |= . + ($bash_deny | map("Bash(\(.) *)"))
 			| .permissions.allow |= . + ($bash_allow | map("Bash(rtk \(.) *)"))
 			| .permissions.deny |= . + ($bash_deny | map("Bash(rtk \(.) *)"))
-			| .permissions.allow |= . + ($path_allow | map("Write(\(.))"))
+			| .permissions.allow |= . + ($path_allow | map("Edit(\(.))"))
 			| .permissions.deny |= . + ($path_deny | map("Read(\(.))"))
 			' > "$settings_path" <<-'EOF'
 		{
@@ -402,8 +381,7 @@ claude_config_permissions() {
 install_claude_agent() {
 	if is_yes "$FORCE_INSTALL" || [[ ! -x "$claude_bin" ]]; then
 		echo "Installing claude-agent..."
-		require_command curl
-		curl -fsSL https://claude.ai/install.sh | bash
+		cat /usr/local/claude-code.sh | bash
 	else
 		echo "claude-agent is already installed."
 	fi
@@ -429,11 +407,8 @@ normalize_choice() {
 answers() {
 	INSTALL_OH_MY_BASH="$(normalize_choice "${INSTALL_OH_MY_BASH:-y}" INSTALL_OH_MY_BASH)"
 	INSTALL_PI="$(normalize_choice "${INSTALL_PI:-y}" INSTALL_PI)"
-	INSTALL_HERMES="$(normalize_choice "${INSTALL_HERMES:-n}" INSTALL_HERMES)"
 	INSTALL_CLAUDE="$(normalize_choice "${INSTALL_CLAUDE:-n}" INSTALL_CLAUDE)"
 	INSTALL_NPM="$(normalize_choice "${INSTALL_NPM:-y}" INSTALL_NPM)"
-	INSTALL_RUST="$(normalize_choice "${INSTALL_RUST:-n}" INSTALL_RUST)"
-	INSTALL_GO="$(normalize_choice "${INSTALL_GO:-n}" INSTALL_GO)"
 	FORCE_INSTALL="$(normalize_choice "${FORCE_INSTALL:-n}" FORCE_INSTALL)"
 }
 
@@ -465,11 +440,8 @@ ask_install_choice() {
 	echo "Select which components you want to install. Answer y or n."
 	ask_choice INSTALL_OH_MY_BASH "Install Oh My Bash?"
 	ask_choice INSTALL_PI "Install pi-agent?"
-	ask_choice INSTALL_HERMES "Install hermes-agent?"
 	ask_choice INSTALL_CLAUDE "Install claude-agent?"
 	ask_choice INSTALL_NPM "Install common npm packages?"
-	ask_choice INSTALL_RUST "Install Rust?"
-	ask_choice INSTALL_GO "Install Go?"
 	ask_choice FORCE_INSTALL "Force installation (overwrite existing)?"
 
 	answers
@@ -488,12 +460,6 @@ run_install() {
 		echo "Skipping pi-agent."
 	fi
 
-	if [ "$INSTALL_HERMES" = "y" ]; then
-		install_hermes_agent
-	else
-		echo "Skipping hermes-agent."
-	fi
-
 	if [ "$INSTALL_CLAUDE" = "y" ]; then
 		install_claude_agent
 	else
@@ -506,19 +472,7 @@ run_install() {
 		echo "Skipping npm package installation."
 	fi
 
-	if [ "$INSTALL_RUST" = "y" ]; then
-		install_rust
-	else
-		echo "Skipping Rust installation."
-	fi
-
-	if [ "$INSTALL_GO" = "y" ]; then
-		install_go
-	else
-		echo "Skipping Go installation."
-	fi
-
-	if is_yes "$INSTALL_PI" || is_yes "$INSTALL_HERMES" || is_yes "$INSTALL_CLAUDE"; then
+	if is_yes "$INSTALL_PI" || is_yes "$INSTALL_CLAUDE"; then
 		install_rtk
 	else
 		echo "Skipping RTK installation because no agent was selected."
@@ -535,7 +489,8 @@ Usage: ${0##*/} [options]
 
 Options:
   -f, --force           Force installation (overwrite existing)
-  --agent <agent>       Enable an agent install (pi, hermes, claude)
+  -u, --update          Update global npm packages and Pi extensions
+  --agent <agent>       Enable an agent install (pi, claude)
   --permissions         Configure permissions for installed Pi and Claude agents
   -h, --help            Show this help message
 EOF
@@ -560,8 +515,13 @@ fi
 install_requested=false
 permissions_requested=false
 force_requested=false
+update_requested=false
 while [[ $# -gt 0 ]]; do
 	case "$1" in
+		-u|--update)
+			update_requested=true
+			shift
+			;;
 		-f|--force)
 			FORCE_INSTALL="y"
 			force_requested=true
@@ -569,18 +529,16 @@ while [[ $# -gt 0 ]]; do
 			;;
 		--agent)
 			if [[ $# -lt 2 || -z "$2" ]]; then
-				echo "--agent requires one of: pi, hermes, claude." >&2
+				echo "--agent requires one of: pi, claude." >&2
 				exit 2
 			fi
 			INSTALL_PI="n"
-			INSTALL_HERMES="n"
 			INSTALL_CLAUDE="n"
 			case "$(to_lowercase "$2")" in
 				pi) INSTALL_PI="y" ;;
-				hermes) INSTALL_HERMES="y" ;;
 				claude) INSTALL_CLAUDE="y" ;;
 				*)
-					echo "Unknown agent: $2. Valid options are: pi, hermes, claude." >&2
+					echo "Unknown agent: $2. Valid options are: pi, claude." >&2
 					exit 2
 					;;
 			esac
@@ -602,6 +560,11 @@ while [[ $# -gt 0 ]]; do
 			;;
 	esac
 done
+
+if [[ "$update_requested" == true ]]; then
+	update
+	exit 0
+fi
 
 # --force alone means a forced default installation; with only --permissions it
 # instead authorizes replacing the generated permission configuration.

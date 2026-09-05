@@ -32,7 +32,6 @@ prepare_home() {
 		
 		# create common user directories for npm and cargo
 		# PATH must be set in the Dockerfile to include these directories for global installations
-		mkdir -p "$CWD/home/.cargo/bin"
 		mkdir -p "$CWD/home/.local/bin"
 		mkdir -p "$CWD/home/.local/share/go/bin"
 		mkdir -p "$CWD/home/.local/share/npm/bin"
@@ -51,14 +50,15 @@ prepare_home() {
 
 build_image() {
 	local user_id=$(id -u)
-	local docker_args="--build-arg FROM_IMAGE=$FROM_IMAGE --build-arg USER_ID=$user_id -t $IMAGE_NAME -f ./build/dockerfile $CWD/build"
+	local arch=$(uname -m)
+	local docker_args="--build-arg FROM_IMAGE=$FROM_IMAGE --build-arg USER_ID=$user_id --build-arg ARCH=$arch -t $IMAGE_NAME -f ./build/dockerfile $CWD/build"
 	cd "$CWD"
 	docker pull $FROM_IMAGE
 	echo "Building $IMAGE_NAME image…"
 	# Prefer BuildKit with buildx when available for verbose/plain progress
 	if command -v docker >/dev/null 2>&1 && docker buildx version >/dev/null 2>&1; then
 		echo "Buildx available — using BuildKit with plain progress"
-		DOCKER_BUILDKIT=1 docker build --progress=plain $docker_args
+		DOCKER_BUILDKIT=1 docker buildx build --load --progress=plain $docker_args
 	else
 		echo "Buildx not available — falling back to standard docker build"
 		docker build $docker_args
@@ -75,17 +75,27 @@ ensure_image() {
 run_image() {
 	ensure_image
 	prepare_home
-    local ws="/home/node/ws"
+	local home="/home/agent"
+    local ws="$home/ws"
 
 	docker run --rm -it \
 	--add-host host.docker.internal:host-gateway \
-	-e "PNPM_HOME=/home/node/.pnpm-store/v11" \
-	-e "npm_config_cache=/home/node/.npm" \
+	--init \
+	--cap-drop=ALL \
+	--security-opt=no-new-privileges:true \
+	--read-only \
+	--pids-limit=512 \
+	--memory=4g \
+	--cpus=2 \
+	--tmpfs /tmp:rw,noexec,nosuid,nodev,size=512m \
+	--tmpfs /run:rw,noexec,nosuid,nodev,size=64m \
+	-e "PNPM_HOME=$home/.pnpm-store/v11" \
+	-e "npm_config_cache=$home/.npm" \
 	-e "PI_WORKSPACE=$ws" \
 	-w "$ws" \
-	-v "$CWD/home:/home/node" \
+	-v "$CWD/home:$home" \
 	-v "$WORK_DIR:$ws" \
-	-v "$CWD/build/setup.sh:/usr/local/bin/setup.sh" \
+	-v "$CWD/build/setup.sh:/usr/local/bin/setup.sh:ro" \
 	"$IMAGE_NAME" "$@"
 }
 
