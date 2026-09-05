@@ -287,6 +287,40 @@ pi_config_rtk_optimizer() {
 	append_to_bashrc_once 'export RTK_DB_PATH="$HOME/.pi/agent/extensions/pi-rtk-optimizer/history.db"'
 }
 
+config_mcp_json() {
+	if [[ $# -ne 3 ]]; then
+		echo "Usage: config_mcp_json <mcp-json-path> <mcp-server-name> <mcp-server-config-json>" >&2
+		return 2
+	fi
+
+	local mcp_json_path="$1"
+	local mcp_server_name="$2"
+	local mcp_server_config="$3"
+	local mcp_json_tmp
+	local -a jq_options=()
+	local -a jq_input=()
+	create_directory "$(dirname "$mcp_json_path")"
+	require_command jq
+	mcp_json_tmp="$(mktemp "${mcp_json_path}.tmp.XXXXXX")"
+	if [[ -f "$mcp_json_path" ]]; then
+		jq_input=("$mcp_json_path")
+	else
+		jq_options=(-n)
+	fi
+	if ! jq \
+		--arg mcp_server_name "$mcp_server_name" \
+		--argjson mcp_server_config "$mcp_server_config" \
+		"${jq_options[@]}" \
+		'.mcpServers |= (. // {}) | .mcpServers[$mcp_server_name] = $mcp_server_config' \
+		"${jq_input[@]}" \
+		>"$mcp_json_tmp"; then
+		rm -f "$mcp_json_tmp"
+		echo "Failed to configure MCP server in $mcp_json_path." >&2
+		return 1
+	fi
+	mv "$mcp_json_tmp" "$mcp_json_path"
+}
+
 install_pi_agent() {
 	if is_yes "$FORCE_INSTALL" || [[ ! -x "$pi_bin" ]]; then
 		echo "Installing pi-agent..."
@@ -311,26 +345,10 @@ install_pi_agent() {
 		# Install context-mode for Pi, which allows it to manage context more effectively.
 		npm install -g context-mode
 		"$pi_bin" install npm:context-mode
-		local mcp_json_path="$HOME/.pi/agent/mcp.json"
-		local mcp_json_tmp
-		create_directory "$(dirname "$mcp_json_path")"
-		require_command jq
-		mcp_json_tmp="$(mktemp "${mcp_json_path}.tmp.XXXXXX")"
-		if [[ -f "$mcp_json_path" ]]; then
-			if ! jq '.mcpServers |= (. // {}) | .mcpServers["context-mode"] = {"command": "context-mode"}' \
-				"$mcp_json_path" >"$mcp_json_tmp"; then
-				rm -f "$mcp_json_tmp"
-				echo "Failed to update Pi MCP configuration." >&2
-				return 1
-			fi
-		else
-			if ! jq -n '.mcpServers = {"context-mode": {"command": "context-mode"}}' >"$mcp_json_tmp"; then
-				rm -f "$mcp_json_tmp"
-				echo "Failed to create Pi MCP configuration." >&2
-				return 1
-			fi
-		fi
-		mv "$mcp_json_tmp" "$mcp_json_path"
+		config_mcp_json \
+			"$HOME/.pi/agent/mcp.json" \
+			"context-mode" \
+			'{"command": "context-mode"}'
 		# install codegraph
 		"$pi_bin" install npm:@vndv/pi-codegraph
 		"$pi_bin" install npm:pi-lens
