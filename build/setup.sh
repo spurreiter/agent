@@ -31,6 +31,7 @@ bash_allow=(
 	'basename'
 	'cat'
 	'cd'
+	'codegraph'
 	'column'
 	'comm'
 	'cut'
