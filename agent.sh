@@ -87,7 +87,7 @@ run_image() {
 	--pids-limit=512 \
 	--memory=4g \
 	--cpus=2 \
-	--tmpfs /tmp:rw,noexec,nosuid,nodev,size=512m \
+	--tmpfs /tmp:rw,exec,nosuid,nodev,size=512m \
 	--tmpfs /run:rw,noexec,nosuid,nodev,size=64m \
 	-e "PNPM_HOME=$home/.pnpm-store/v11" \
 	-e "npm_config_cache=$home/.npm" \
