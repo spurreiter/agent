@@ -8,8 +8,7 @@ cd "$HOME"
 # Define default permission rules for Pi and Claude agents. These rules are used to configure the agents' access to files and commands.
 path_allow=(
 	'*.env.example'
-	'/tmp/*'
-	'/home/node/ws/*'
+	'/home/agent/ws'
 )
 path_deny=(
 	'*.env'
@@ -147,7 +146,7 @@ is_yes() {
 	[[ "$1" == "y" ]]
 }
 
-to_json(){
+to_json() {
 	local array=("$@")	
 	printf '%s\n' "${array[@]}" | jq -R -s -c 'split("\n")[:-1]'
 }
@@ -269,7 +268,11 @@ pi_config_permission_system() {
 				"bash": {
 					"*": "ask"
 				},
-				"external_directory": "ask"
+				"external_directory": {                                                                                                    
+					"*": "ask",                                                                                                              
+					"/tmp": "allow",                                                                                                         
+					"/tmp/*": "allow"                                                                                                        
+				}
 			}
 		}
 		EOF
