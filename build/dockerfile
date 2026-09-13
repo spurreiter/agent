@@ -25,6 +25,7 @@ RUN apt-get update \
 	git \
 	jq \
 	less \
+	locales \
 	python3 \
 	ripgrep \
 	tmux \
@@ -32,6 +33,8 @@ RUN apt-get update \
 	vim \
 	vim-common \
 	xxd \
+&& locale-gen en_US.UTF-8 \
+&& update-locale LANG=en_US.UTF-8 \
 && mkdir -p /usr/local/bin \
 && ln -sf "$(which fdfind)" /usr/local/bin/fd
 
