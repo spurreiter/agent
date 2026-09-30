@@ -53,6 +53,12 @@ RUN apt-get install -y --no-install-recommends \
 	plantuml \
 	graphviz
 
+## install git bug
+ARG gitbug_version=0.11.0
+RUN curl -fsSL -o /tmp/git-bug.deb https://github.com/git-bug/git-bug/releases/download/v${gitbug_version}/git-bug_${gitbug_version}_linux_${ARCH}.deb \
+&& apt install -y --no-install-recommends /tmp/git-bug.deb \
+&& rm /tmp/git-bug.deb
+
 ## install node@lts - https://github.com/tj/n/tree/master/bin
 ARG node_version=26
 RUN curl -fsSL https://raw.githubusercontent.com/tj/n/584a616/bin/n | bash -s install $node_version
