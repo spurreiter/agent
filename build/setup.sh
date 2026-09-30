@@ -115,6 +115,12 @@ bash_allow=(
 	'write'
 	'xxd'
 )
+
+bash_ask=(
+	'git commit'
+	'git merge'
+)
+
 bash_deny=(
 	'apt'
 	'brew'
@@ -248,6 +254,7 @@ pi_config_permission_system() {
 	local path_allow_json=$(to_json "${path_allow[@]}")
 	local path_deny_json=$(to_json "${path_deny[@]}")
 	local bash_allow_json=$(to_json "${bash_allow[@]}")
+	local bash_ask_json=$(to_json "${bash_ask[@]}")
 	local bash_deny_json=$(to_json "${bash_deny[@]}")
 
 	# Merge permission entries: keep existing, set default ask, and add allowed bash commands
@@ -255,11 +262,13 @@ pi_config_permission_system() {
 		--argjson path_allow "$path_allow_json" \
 		--argjson path_deny "$path_deny_json" \
 		--argjson bash_allow "$bash_allow_json" \
+		--argjson bash_ask "$bash_ask_json" \
 		--argjson bash_deny "$bash_deny_json" '
 		.permission |= (. // {})
 		| .permission.path |= . + (reduce $path_allow[] as $path ({}; . + {("\($path)"): "allow"}) )
 		| .permission.path |= . + (reduce $path_deny[] as $path ({}; . + {("\($path)"): "deny"}) )
 		| .permission.bash |= . + (reduce $bash_allow[] as $cmd ({}; . + {("\($cmd) *"): "allow"}) )
+		| .permission.bash |= . + (reduce $bash_ask[] as $cmd ({}; . + {("\($cmd) *"): "ask"}) )
 		| .permission.bash |= . + (reduce $bash_deny[] as $cmd ({}; . + {("\($cmd) *"): "deny"}) )
 		| .permission.bash |= . + (to_entries | map(select(.key | startswith("rtk ") | not) | {("rtk " + .key): .value}) | add // {})
 		' >"$config_json_path" <<-'EOF'
